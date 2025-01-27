@@ -147,6 +147,7 @@ function appendMessage(role, content) {
 async function sendQuery(query) {
     spinner.style.display = 'inline-block';
     try {
+        appendMessage('user', query);
         const response = await fetch('/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

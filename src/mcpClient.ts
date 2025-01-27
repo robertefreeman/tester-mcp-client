@@ -170,7 +170,7 @@ export class MCPClient {
         log.debug(`[internal] Calling tool (count: ${toolCallCount}): ${JSON.stringify(params)}`);
         let results;
         try {
-            results = await this.client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec });
+            results = await this.client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000});
             if (results.content instanceof Array && results.content.length !== 0) {
                 const text = results.content.map((x) => x.text);
                 messages.push({
@@ -232,15 +232,16 @@ export class MCPClient {
      * Also, process any tool calls.
      */
     async processQuery(query: string, messages: MessageParam[]): Promise<MessageParam[]> {
-        messages.push({ role: 'user', content: query });
+        const msg = JSON.parse(JSON.stringify(messages));
+        msg.push({ role: 'user', content: query });
         const response: Message = await this.anthropic.messages.create({
             model: this.modelName,
             max_tokens: this.modelMaxOutputTokens,
-            messages,
+            messages: msg,
             system: this.systemPrompt,
             tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         });
-        log.debug(`[internal] Received response: {JSON.stringify(response.content)}`);
-        return await this.processMsg(response, messages);
+        log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
+        return await this.processMsg(response, msg);
     }
 }

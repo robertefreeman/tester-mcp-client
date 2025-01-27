@@ -73,12 +73,11 @@ app.post('/chat', async (req: Request, res: Response) : Promise<Response> => {
             await client.connectToServer();
         }
         // process the query with your existing logic
-        const nrMessagesBefore = messages.length;
         const updatedMessages = await client.processQuery(query, messages);
 
         // newMessages = whatever was appended to messages by the call
-        // i.e. everything after the original length
-        const newMessages = updatedMessages.slice(nrMessagesBefore);
+        // i.e. everything after the original length, also skip query message
+        const newMessages = updatedMessages.slice(messages.length + 1);
         return res.json({ newMessages });
     } catch (error) {
         log.error(`Error in /chat: ${error}`);
