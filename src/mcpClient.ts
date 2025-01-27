@@ -103,7 +103,7 @@ export class MCPClient {
      * Connect to the server using stdio transport and list available tools.
      */
     async connectToServer() {
-        const customHeaders = this.customHeaders;
+        const { customHeaders } = this;
         const transport = new SSEClientTransport(
             new URL(this.serverUrl),
             {
@@ -170,7 +170,7 @@ export class MCPClient {
         log.debug(`[internal] Calling tool (count: ${toolCallCount}): ${JSON.stringify(params)}`);
         let results;
         try {
-            results = await this.client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000});
+            results = await this.client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
             if (results.content instanceof Array && results.content.length !== 0) {
                 const text = results.content.map((x) => x.text);
                 messages.push({
