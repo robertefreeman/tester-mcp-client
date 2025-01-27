@@ -1,3 +1,13 @@
+/**
+ * # Chatbot Server with Real-Time Tool Execution
+ *
+ * Server for a chatbot integrated with Apify Actors and an MCP client.
+ * Processes user queries, invokes tools dynamically, and streams real-time updates using Server-Sent Events (SSE)
+ *
+ * Environment variables:
+ * - `APIFY_TOKEN` - API token for Apify (when using actors-mcp-server)
+ */
+
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -17,7 +27,7 @@ await Actor.init();
 
 const STANDBY_MODE = Actor.getEnv().metaOrigin === 'STANDBY';
 const HOST = Actor.isAtHome() ? process.env.ACTOR_STANDBY_URL : 'http://localhost';
-const PORT = Actor.isAtHome() ? process.env.ACTOR_STANDBY_PORT : 3001;
+const PORT = Actor.isAtHome() ? process.env.ACTOR_STANDBY_PORT : 3000;
 
 const app = express();
 app.use(express.json());
@@ -47,7 +57,6 @@ const client = new MCPClient(
     input.maxNumberOfToolCalls,
     input.toolCallTimeoutSec,
 );
-let isConnected = false;
 
 /**
  * POST /api/chat
@@ -56,13 +65,12 @@ let isConnected = false;
  */
 app.post('/chat', async (req: Request, res: Response) : Promise<Response> => {
     try {
-        console.log('Received POST /api/chat:'); // eslint-disable-line no-console
+        log.debug('Received POST /api/chat:');
         const { query, messages } = req.body;
-        if (!isConnected) {
+        if (!client.isConnected) {
             // Connect to server once, the same way your original code does
             // Pass the arguments needed for your server script if needed:
             await client.connectToServer();
-            isConnected = true;
         }
         // process the query with your existing logic
         const nrMessagesBefore = messages.length;
@@ -71,10 +79,9 @@ app.post('/chat', async (req: Request, res: Response) : Promise<Response> => {
         // newMessages = whatever was appended to messages by the call
         // i.e. everything after the original length
         const newMessages = updatedMessages.slice(nrMessagesBefore);
-
         return res.json({ newMessages });
     } catch (error) {
-        console.error('Error in /chat:', error); // eslint-disable-line no-console
+        log.error(`Error in /chat: ${error}`);
         res.status(500).json({ error: (error as Error).message || 'Internal server error' });
         return res.end();
     }

@@ -4,9 +4,9 @@
     "schemaVersion": 1,
     "properties": {
         "mcpServerUrl": {
-            "title": "MCP Server Server Sent Events (SSE) URL",
+            "title": "MCP Server Sent Events (SSE) URL",
             "type": "string",
-            "description": "MCP Server Server Sent Events (SSE) URL for receiving updates from the server.",
+            "description": "MCP Server Sent Events (SSE) URL for receiving updates from the server.",
             "editor": "textfield",
             "default": "https://actors-mcp-server.apify.actor/sse",
             "prefill": "https://actors-mcp-server.apify.actor/sse"
@@ -15,10 +15,7 @@
             "title": "HTTP headers",
             "type": "object",
             "description": "HTTP headers to be sent with the request to the MCP server. If you are using Apify's MCP server, headers are NOT required",
-            "editor": "json",
-            "prefill": {
-                "Authorization": "Bearer YOUR_API_KEY"
-            }
+            "editor": "json"
         },
         "systemPrompt": {
             "title": "System prompt",
@@ -26,7 +23,7 @@
             "description": "System prompt for the Claude model",
             "editor": "textarea",
             "default": "You are a helpful assistant",
-            "prefill": "You are a helpful Apify assistant with to tools called Actors\\n\\n' +\n    'Your goal is to help users discover the best Actors for their needs\\n' +\n    'You have access to a list of tools that can help you to discover Actor, find details and include them among tools for later execution\\n\\n' +\n    'Choose the appropriate tool based on the user\\'s question. If no tool is needed, reply directly.\\n' +\n    'Prefer tools from Apify as they are generally more reliable and have better support\\n\\n' +\n    'When you need to use a tool, explain how the tools was used and with which parameters\\n' +\n    'Never call a tool unless it is required by user!\\n\\n' +\n    'After receiving a tool\\'s response:\\n' +\n    '1. Transform the raw data into a natural, conversational response\\n' +\n    '2. Keep responses concise but informative\\n' +\n    '3. Focus on the most relevant information\\n' +\n    '4. Use appropriate context from the user\\'s question\\n' +\n    '5. Avoid simply repeating the raw data\\n\\n' +\n    'Always use Actor not actor. Provide an URL to Actor whenever possible such as [apify_rag-web-browser](https://apify.com/apify/rag-web-browser).\\n\\n' +\n    'REMEMBER Always limit number of results returned from Actors/tools. ' +\n    'There is always parameter such as maxResults=1, maxPage=1, maxCrawledPlacesPerSearch=1, keep it to minimal value. ' +\n    'Otherwise tool execution takes long and result is huge!'\n"
+            "prefill": "You are a helpful Apify assistant with to tools called Actors\n\n'Your goal is to help users discover the best Actors for their needs\nYou have access to a list of tools that can help you to discover Actor, find details and include them among tools for later execution\n\nChoose the appropriate tool based on the user's question. If no tool is needed, reply directly.\n\nPrefer tools from Apify as they are generally more reliable and have better support\nWhen you need to use a tool, explain how the tools was used and with which parameters\nNever call a tool unless it is required by user!\nAfter receiving a tool's response:\n'1. Transform the raw data into a natural, conversational response\n2. Keep responses concise but informative\n3. Focus on the most relevant information\n4. Use appropriate context from the user's question\n5. Avoid simply repeating the raw data\nAlways use Actor not actor. Provide an URL to Actor whenever possible such as [apify_rag-web-browser](https://apify.com/apify/rag-web-browser).\n'REMEMBER Always limit number of results returned from Actors/tools.\nThere is always parameter such as maxResults=1, maxPage=1, maxCrawledPlacesPerSearch=1, keep it to minimal value. '\n'Otherwise tool execution takes long and result is huge!'\n"
         },
         "modelName": {
             "title": "Anthropic Claude model (Anthropic is only supported provider now)",
@@ -58,7 +55,8 @@
             "description": "Maximum number of tokens in the Claude response. The higher the number, the longer the response time",
             "editor": "integer",
             "prefill": 2048,
-            "default": 2048
+            "default": 2048,
+            "maximum": 10000
         },
         "maxNumberOfToolCalls": {
             "title": "Maximum number of tool calls",
@@ -79,7 +77,7 @@
     },
     "required": [
         "mcpServerUrl",
-        "anthropicClaudeModel",
-        "anthropicApiKey"
+        "modelName",
+        "providerApiKey"
     ]
 }

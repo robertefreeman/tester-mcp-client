@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * Create an MCP client that connects to the server using SSE transport.
  *
@@ -12,6 +11,7 @@ import type { Message, ToolUseBlock, MessageParam } from '@anthropic-ai/sdk/reso
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { log } from 'apify';
 import dotenv from 'dotenv';
 import { EventSource } from 'eventsource';
 
@@ -62,15 +62,15 @@ export type Tool = {
 }
 
 export class MCPClient {
+    private _isConnected = false;
     private anthropic: Anthropic;
-
-    private serverUrl: string;
-    private customHeaders: Record<string, string> | null;
-    private systemPrompt: string;
-    private modelName: string;
-    private modelMaxOutputTokens: number;
-    private maxNumberOfToolCalls: number;
-    private toolCallTimeoutSec: number;
+    private readonly serverUrl: string;
+    private readonly customHeaders: Record<string, string> | null;
+    private readonly systemPrompt: string;
+    private readonly modelName: string;
+    private readonly modelMaxOutputTokens: number;
+    private readonly maxNumberOfToolCalls: number;
+    private readonly toolCallTimeoutSec: number;
     private client = new Client(
         { name: 'example-client', version: '0.1.0' },
         { capabilities: {} },
@@ -127,6 +127,11 @@ export class MCPClient {
         );
         await this.client.connect(transport);
         await this.updateTools();
+        this._isConnected = true;
+    }
+
+    get isConnected() {
+        return this._isConnected;
     }
 
     async updateTools() {
@@ -136,7 +141,7 @@ export class MCPClient {
             description: x.description,
             input_schema: x.inputSchema,
         }));
-        console.log('Connected to server with tools:', this.tools.map((x) => x.name));
+        log.debug(`Connected to server with tools: ${this.tools.map((x) => x.name)}`);
     }
 
     /**
@@ -167,7 +172,7 @@ export class MCPClient {
         });
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const params = { name: content.name, arguments: content.input as any };
-        console.log(`[internal] Calling tool (count: ${toolCallCount}): ${JSON.stringify(params)}`);
+        log.debug(`[internal] Calling tool (count: ${toolCallCount}): ${JSON.stringify(params)}`);
         let results;
         try {
             results = await this.client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec });
@@ -204,10 +209,10 @@ export class MCPClient {
                 }],
             });
         }
-        console.log(`[internal] Received response`);
-        console.log(`[internal] Send response`);
+        log.debug('[internal] Received response');
         await this.updateTools(); // update tools in the case a new tool was added
         // Get next response from Claude
+        log.debug('[internal] Get model response from tool result');
         const nextResponse: Message = await this.anthropic.messages.create({
             model: this.modelName,
             max_tokens: this.modelMaxOutputTokens,
@@ -223,7 +228,7 @@ export class MCPClient {
                 return await this.handleToolCall(c, messages, toolCallCount + 1);
             }
         }
-        console.log(`[internal] Return messages`);
+        log.debug('[internal] Return messages');
         return messages;
     }
 
@@ -240,7 +245,7 @@ export class MCPClient {
             system: this.systemPrompt,
             tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         });
-        console.log('[internal] Received response from Claude:', JSON.stringify(response.content));
+        log.debug(`[internal] Received response: {JSON.stringify(response.content)}`);
         return await this.processMsg(response, messages);
     }
 }

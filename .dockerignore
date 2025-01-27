@@ -5,6 +5,7 @@
 apify_storage
 crawlee_storage
 storage
+src/storage
 
 # installed files
 node_modules
@@ -14,6 +15,5 @@ node_modules
 
 # data
 data
-code/mcp-server/src/storage
 dist
 .env

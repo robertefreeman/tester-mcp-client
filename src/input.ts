@@ -22,7 +22,7 @@ export async function processInput(originalInput: Partial<Input> | Partial<Stand
     }
 
     if (!input.llmProviderApiKey) {
-        throw new Error('API key is not provided');
+        throw new Error('API key for LLM is not provided');
     }
     return input;
 }
