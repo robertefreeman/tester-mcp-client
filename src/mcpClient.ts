@@ -103,6 +103,7 @@ export class MCPClient {
      * Connect to the server using stdio transport and list available tools.
      */
     async connectToServer() {
+        const customHeaders = this.customHeaders;
         const transport = new SSEClientTransport(
             new URL(this.serverUrl),
             {
@@ -112,13 +113,7 @@ export class MCPClient {
                     // You can use this to set additional headers on the outgoing request.
                     // Based on this example: https://github.com/modelcontextprotocol/typescript-sdk/issues/118
                     async fetch(input: Request | URL | string, init?: RequestInit) {
-                        const headers = new Headers(init?.headers || {});
-                        // update headers with this.customHeaders
-                        if (this.customHeaders) {
-                            for (const key of Object.keys(this.customHeaders)) {
-                                headers.set(key, this.customeHeaders[key]);
-                            }
-                        }
+                        const headers = new Headers({ ...(init?.headers || {}), ...customHeaders });
                         return fetch(input, { ...init, headers });
                     },
                     // We have to cast to "any" to use it, since it's non-standard
