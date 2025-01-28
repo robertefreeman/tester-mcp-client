@@ -74,30 +74,30 @@ Download the source code:
 git clone https://github.com/apify/tester-mcp-client.git
 cd tester-mcp-client
 ```
-Server will start on `http://localhost:3000` and you can send requests to it, for example:
-
-```bash
-curl "http://localhost:3000/search?query=example.com"
+Install the dependencies:
+```shell
+npm install
 ```
 
-You can deploy the MCP client as a **standalone Apify Actor** that serves:
+Create a `.env` file with the following content (see the `.env.example` file):
 
-- `index.html` + `client.js` for a chat UI.
-- On load, the UI connects via SSE to your **main MCP server** (either local or on Apify).
+```plaintext
+APIFY_TOKEN=YOUR_APIFY_TOKEN
+LLM_PROVIDER_API_KEY=
+```
 
-**Or** you can run the client locally for development:
+Default values such as `mcpServerUrl`, `systemPropmt` and other are present in the 'const.ts' file.
+Run the client locally:
 
-1. Serve the `index.html` + `client.js` from an Express server (e.g., `app.use(express.static('public'))`).
-2. In `client.js`, set `new EventSource('https://path-to-your-mcp-server/sse')`.
-3. Start interacting with the server.
+```shell
+npm start
+```
 
+Navigate to `http://localhost:3000` in your browser and interact with the MCP server.
 
-- **System Prompt**: If you have a system prompt or instructions to show the user, fetch or define them in your code. Display them in a collapsible `<details>` block.
-
+**Happy chatting with Apify Actors!**
 
 # ⓘ Limitations and feedback
 
 The client does not support all MCP features, such as Prompts and Resource.
-Also, it does not store the conversation on the client side.
-
-**Happy chatting with Apify Actors!**
+Also, it does not store the conversation, so refreshing the page will clear the chat history.
