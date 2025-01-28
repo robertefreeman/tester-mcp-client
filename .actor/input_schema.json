@@ -63,8 +63,8 @@
             "type": "integer",
             "description": "Maximum number of times a tool can be called in a single request. Keep this number low for simple flows",
             "editor": "number",
-            "prefill": 10,
-            "default": 10
+            "prefill": 5,
+            "default": 5
         },
         "toolCallTimeoutSec": {
             "title": "Tool call timeout",
