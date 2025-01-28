@@ -64,9 +64,9 @@ Running the MCP Client for 1 hour costs approximately $0.06.
 With the Apify Free tier (no credit card required 💳), you can run the MCP Client for 80 hours per month.
 Definitely enough to test your MCP server!
 
-## Local Development
+## Local development
 
-The Tester MCP Client Actor has open source available on [GitHub](https://github.com/apify/rag-web-browser), so that you can modify and develop it yourself.
+The Tester MCP Client Actor is open source and available on [GitHub](https://github.com/apify/rag-web-browser), allowing you to modify and develop it as needed.
 
 Download the source code:
 
@@ -79,21 +79,22 @@ Install the dependencies:
 npm install
 ```
 
-Create a `.env` file with the following content (see the `.env.example` file):
+Create a `.env` file with the following content (refer to the `.env.example` file for guidance):
 
 ```plaintext
 APIFY_TOKEN=YOUR_APIFY_TOKEN
-LLM_PROVIDER_API_KEY=
+LLM_PROVIDER_API_KEY=YOUR_API_KEY
 ```
 
-Default values such as `mcpServerUrl`, `systemPropmt` and other are present in the 'const.ts' file.
-Run the client locally:
+Default values for settings such as `mcpServerUrl`, `systemPrompt`, and others are defined in the `const.ts` file. You can adjust these as needed for your development.
 
-```shell
+Run the client locally
+
+```bash
 npm start
 ```
 
-Navigate to `http://localhost:3000` in your browser and interact with the MCP server.
+Navigate to [http://localhost:3000](http://localhost:3000) in your browser to interact with the MCP server.
 
 **Happy chatting with Apify Actors!**
 
