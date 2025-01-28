@@ -8,8 +8,8 @@
             "type": "string",
             "description": "MCP Server Sent Events (SSE) URL for receiving updates from the server.",
             "editor": "textfield",
-            "default": "https://actors-mcp-server.apify.actor/sse",
-            "prefill": "https://actors-mcp-server.apify.actor/sse"
+            "default": "https://actors-mcp-server.apify.actor/sse?enableActorAutoLoading=true",
+            "prefill": "https://actors-mcp-server.apify.actor/sse?enableActorAutoLoading=true"
         },
         "headers": {
             "title": "HTTP headers",
@@ -27,7 +27,7 @@
         },
         "modelName": {
             "title": "Anthropic Claude model (Anthropic is only supported provider now)",
-            "type": "enum",
+            "type": "string",
             "description": "Select a model to be used for selecting tools and generating text.\n\n- Claude 3.5 Sonnet (2024-10-22) - the most intelligent model\n- Claude 3.5 Haiku (2024-10-22) - a fastest model\n- Claude 3 Haiku (2024-03-07) - a fastest and most compact model for near-instant responsiveness",
             "editor": "select",
             "enum": [
@@ -44,16 +44,16 @@
         },
         "llmProviderApiKey": {
             "title": "LLM Provider API key (Anthropic is only supported provider now)",
-            "type": "textfield",
+            "type": "string",
             "description": "API key for accessing a Large Language Model",
             "editor": "textfield",
-            "secret": true
+            "isSecret": true
         },
         "modelMaxOutputTokens": {
             "title": "Maximum tokens for Claude response",
             "type": "integer",
             "description": "Maximum number of tokens in the Claude response. The higher the number, the longer the response time",
-            "editor": "integer",
+            "editor": "number",
             "prefill": 2048,
             "default": 2048,
             "maximum": 10000
@@ -62,7 +62,7 @@
             "title": "Maximum number of tool calls",
             "type": "integer",
             "description": "Maximum number of times a tool can be called in a single request. Keep this number low for simple flows",
-            "editor": "integer",
+            "editor": "number",
             "prefill": 10,
             "default": 10
         },
@@ -70,7 +70,7 @@
             "title": "Tool call timeout",
             "type": "integer",
             "description": "Timeout for a single tool call in seconds",
-            "editor": "integer",
+            "editor": "number",
             "prefill": 120,
             "default": 120
         }
@@ -78,6 +78,6 @@
     "required": [
         "mcpServerUrl",
         "modelName",
-        "providerApiKey"
+        "llmProviderApiKey"
     ]
 }
