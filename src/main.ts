@@ -23,7 +23,6 @@ import type { Input } from './types.js';
 
 await Actor.init();
 
-const STANDBY_MODE = Actor.getEnv().metaOrigin === 'STANDBY';
 const HOST = Actor.isAtHome() ? process.env.ACTOR_STANDBY_URL : 'http://localhost';
 const PORT = Actor.isAtHome() ? process.env.ACTOR_STANDBY_PORT : 3000;
 
@@ -75,11 +74,11 @@ app.get('/sse', (req, res) => {
 
     const clientId = ++clientIdCounter;
     sseClients.push({ id: clientId, res });
-    console.log(`New SSE client: ${clientId}`);
+    log.debug(`New SSE client: ${clientId}`);
 
     // If client closes connection, remove from array
     req.on('close', () => {
-        console.log(`SSE client disconnected: ${clientId}`);
+        log.debug(`SSE client disconnected: ${clientId}`);
         sseClients = sseClients.filter((c) => c.id !== clientId);
     });
 });
@@ -97,9 +96,18 @@ app.post('/message', async (req, res) => {
         });
         return res.json({ ok: true });
     } catch (err) {
-        console.error('Error in processing user query:', err);
+        log.error(`Error in processing user query: ${err}`);
         return res.json({ error: (err as Error).message });
     }
+});
+
+app.get('/client-info', (_req, res) => {
+    // If you have these values in config or environment, adapt as needed.
+    res.json({
+        mcpServerUrl: input.mcpServerUrl,
+        systemPrompt: input.systemPrompt,
+        modelName: input.modelName,
+    });
 });
 
 /**
@@ -116,5 +124,5 @@ app.use((req: Request, res: Response) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Client actor listening on port ${PORT}, SSE at /sse, message at /message`);
+    log.info(`Navigate ${HOST} in your browser to interact with an MCP server.`);
 });

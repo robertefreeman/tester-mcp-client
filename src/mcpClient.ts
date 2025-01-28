@@ -1,10 +1,7 @@
 /**
- * Create an MCP client that connects to the server using SSE transport.
+ * Create an MCP client that connects to the server using SSE transport
  *
  */
-
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 import { Anthropic } from '@anthropic-ai/sdk';
 import type { Message, MessageParam, ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
@@ -12,45 +9,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
-import dotenv from 'dotenv';
 import { EventSource } from 'eventsource';
 
-const filename = fileURLToPath(import.meta.url);
-const dirname = path.dirname(filename);
-
-dotenv.config({ path: path.resolve(dirname, '../../.env') });
-
-// const MAX_TOKENS = 2048; // Maximum tokens for Claude response
-
-// const CLAUDE_MODEL = 'claude-3-5-sonnet-20241022'; // the most intelligent model
-// const CLAUDE_MODEL = 'claude-3-5-haiku-20241022'; // a fastest model
-// const CLAUDE_MODEL = 'claude-3-haiku-20240307'; // a fastest and most compact model for near-instant responsiveness
-
-// const SYSTEM_PROMPT = 'You are a helpful Apify assistant with to tools called Actors\n'
-//     + '\n'
-//     + 'Your goal is to help users discover the best Actors for their needs\n'
-//     + 'You have access to a list of tools that can help you to discover Actor, find details and include them among tools for later execution\n'
-//     + '\n'
-//     + 'Choose the appropriate tool based on the user\'s question. If no tool is needed, reply directly.\n'
-//     + 'Prefer tools from Apify as they are generally more reliable and have better support\n'
-//     + '\n'
-//     + 'When you need to use a tool, explain how the tools was used and with which parameters\n'
-//     + 'Never call a tool unless it is required by user!\n'
-//     + '\n'
-//     + 'After receiving a tool\'s response:\n'
-//     + '1. Transform the raw data into a natural, conversational response\n'
-//     + '2. Keep responses concise but informative\n'
-//     + '3. Focus on the most relevant information\n'
-//     + '4. Use appropriate context from the user\'s question\n'
-//     + '5. Avoid simply repeating the raw data\n'
-//     + '\n'
-//     + 'Always use Actor not actor'
-//     + 'Provide an URL to Actor whenever possible such as [apify_rag-web-browser](https://apify.com/apify/rag-web-browser)'
-//     + '\n'
-//     + 'REMEMBER Always limit number of results returned from Actors/tools. '
-//     + 'There is always parameter such as maxResults=1, maxPage=1, maxCrawledPlacesPerSearch=1, keep it to minimal value.'
-//     + 'Otherwise tool execution takes long and result is huge!';
-//
 if (typeof globalThis.EventSource === 'undefined') {
     globalThis.EventSource = EventSource as unknown as typeof globalThis.EventSource;
 }

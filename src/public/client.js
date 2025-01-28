@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // client.js
 
 // ===== DOM Elements =====
@@ -16,7 +17,7 @@ eventSource.onmessage = (event) => {
     let data;
     try {
         data = JSON.parse(event.data);
-    } catch (err) {
+    } catch {
         console.warn('Could not parse SSE event as JSON:', event.data);
         return;
     }
@@ -98,14 +99,7 @@ function appendToolBlock(item) {
 </details>
 `;
     } else if (item.type === 'tool_result') {
-        let pretty = '';
-        try {
-            const parsed = JSON.parse(item.content);
-            pretty = JSON.stringify(parsed, null, 2);
-        } catch {
-            pretty = item.content;
-        }
-        const summary = item.is_error ? 'Tool Result (Error)' : 'Tool Result';
+        const summary = item.is_error ? 'Tool result (Error)' : 'Tool result';
         container.innerHTML = `
 <details>
   <summary>${summary}</summary>
@@ -210,5 +204,24 @@ sendBtn.addEventListener('click', () => {
 queryInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         sendBtn.click();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const resp = await fetch('/client-info');
+        const data = await resp.json();
+
+        const mcpServerUrl = document.getElementById('mcpServerUrl');
+        if (mcpServerUrl) {
+            mcpServerUrl.textContent = data.mcpServerUrl;
+        }
+        // Show the system prompt in a collapsible <details> (assuming you have <pre id="systemPromptPre">)
+        const clientInfo = document.getElementById('clientInfo');
+        if (clientInfo) {
+            clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
+        }
+    } catch (err) {
+        console.error('Error fetching client info:', err);
     }
 });
