@@ -7,7 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { Anthropic } from '@anthropic-ai/sdk';
-import type { Message, ToolUseBlock, MessageParam } from '@anthropic-ai/sdk/resources/messages';
+import type { Message, MessageParam, ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -62,6 +62,7 @@ export type Tool = {
 }
 
 export class MCPClient {
+    private conversation: MessageParam[] = [];
     private _isConnected = false;
     private anthropic: Anthropic;
     private readonly serverUrl: string;
@@ -103,6 +104,7 @@ export class MCPClient {
      * Connect to the server using stdio transport and list available tools.
      */
     async connectToServer() {
+        if (this.isConnected) return;
         const { customHeaders } = this;
         const transport = new SSEClientTransport(
             new URL(this.serverUrl),
@@ -143,105 +145,90 @@ export class MCPClient {
      * Process LLM response and check whether it contains any tool calls.
      * If a tool call is found, call the tool and return the response and save the results to messages with type: user.
      * If the tools response is too large, truncate it to the limit.
+     * If the number of tool calls exceeds the limit, return an error message.
      */
-    async processMsg(response: Message, messages: MessageParam[]): Promise<MessageParam[]> {
-        for (const content of response.content) {
-            if (content.type === 'text') {
-                messages.push({ role: 'assistant', content: content.text });
-            } else if (content.type === 'tool_use') {
-                await this.handleToolCall(content, messages);
-            }
-        }
-        return messages;
-    }
-
-    /**
-     * Call the tool and return the response.
-     */
-    private async handleToolCall(content: ToolUseBlock, messages: MessageParam[], toolCallCount = 0): Promise<MessageParam[]> {
-        messages.push({
-            role: 'assistant',
-            content: [
-                { id: content.id, input: content.input, name: content.name, type: 'tool_use' },
-            ],
-        });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const params = { name: content.name, arguments: content.input as any };
-        log.debug(`[internal] Calling tool (count: ${toolCallCount}): ${JSON.stringify(params)}`);
-        let results;
-        try {
-            results = await this.client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
-            if (results.content instanceof Array && results.content.length !== 0) {
-                const text = results.content.map((x) => x.text);
-                messages.push({
-                    role: 'user',
+    async handleLLMResponse(
+        response: Message,
+        sseEmit: (role: string, content: string | ContentBlockParam[]) => void,
+        toolCallCount = 0,
+    ) {
+        for (const block of response.content) {
+            if (block.type === 'text') {
+                this.conversation.push({ role: 'assistant', content: block.text || '' });
+                sseEmit('assistant', block.text || '');
+            } else if (block.type === 'tool_use') {
+                if (toolCallCount > this.maxNumberOfToolCalls) {
+                    this.conversation.push({ role: 'assistant', content: `Too many tool calls!` });
+                    sseEmit('assistant', `Too many tool calls! Limit is ${this.maxNumberOfToolCalls}`);
+                    return;
+                }
+                const msgAssistant = {
+                    role: 'assistant' as const,
+                    content: [{ id: block.id, input: block.input, name: block.name, type: 'tool_use' as const }],
+                };
+                sseEmit(msgAssistant.role, msgAssistant.content);
+                this.conversation.push(msgAssistant);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const params = { name: block.name, arguments: block.input as any };
+                log.debug(`[internal] Calling tool (count: ${toolCallCount}): ${JSON.stringify(params)}`);
+                let results;
+                const msgUser = {
+                    role: 'user' as const,
                     content: [{
-                        tool_use_id: content.id,
-                        type: 'tool_result',
-                        content: text.join('\n\n'),
+                        tool_use_id: block.id,
+                        type: 'tool_result' as const,
+                        content: '',
                         is_error: false,
                     }],
+                };
+                try {
+                    results = await this.client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
+                    if (results.content instanceof Array && results.content.length !== 0) {
+                        const text = results.content.map((x) => x.text);
+                        msgUser.content[0].content = text.join('\n\n');
+                    } else {
+                        msgUser.content[0].content = `No results retrieved from ${params.name}`;
+                        msgUser.content[0].is_error = true;
+                    }
+                } catch (error) {
+                    msgUser.content[0].content = `Error when calling tool ${params.name}, error: ${error}`;
+                    msgUser.content[0].is_error = true;
+                }
+                sseEmit(msgUser.role, msgUser.content);
+                this.conversation.push(msgUser);
+                await this.updateTools(); // update tools in the case a new tool was added
+                // Get next response from Claude
+                log.debug('[internal] Get model response from tool result');
+                const nextResponse: Message = await this.anthropic.messages.create({
+                    model: this.modelName,
+                    max_tokens: this.modelMaxOutputTokens,
+                    messages: this.conversation,
+                    system: this.systemPrompt,
+                    tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
                 });
-            } else {
-                messages.push({
-                    role: 'user',
-                    content: [{
-                        tool_use_id: content.id,
-                        type: 'tool_result',
-                        content: `No results retrieved from ${params.name}`,
-                        is_error: true,
-                    }],
-                });
-            }
-        } catch (error) {
-            messages.push({
-                role: 'user',
-                content: [{
-                    tool_use_id: content.id,
-                    type: 'tool_result',
-                    content: `Error when calling tool ${params.name}, error: ${error}`,
-                    is_error: true,
-                }],
-            });
-        }
-        log.debug('[internal] Received response');
-        await this.updateTools(); // update tools in the case a new tool was added
-        // Get next response from Claude
-        log.debug('[internal] Get model response from tool result');
-        const nextResponse: Message = await this.anthropic.messages.create({
-            model: this.modelName,
-            max_tokens: this.modelMaxOutputTokens,
-            messages,
-            system: this.systemPrompt,
-            tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
-        });
-
-        for (const c of nextResponse.content) {
-            if (c.type === 'text') {
-                messages.push({ role: 'assistant', content: c.text });
-            } else if (c.type === 'tool_use' && toolCallCount < this.maxNumberOfToolCalls) {
-                return await this.handleToolCall(c, messages, toolCallCount + 1);
+                await this.handleLLMResponse(nextResponse, sseEmit, toolCallCount + 1);
             }
         }
-        log.debug('[internal] Return messages');
-        return messages;
     }
 
     /**
-     * Process user query by sending it to the server and returning the response.
-     * Also, process any tool calls.
+     * Process a user query:
+     * 1) Use Anthropic to generate a response (which may contain "tool_use").
+     * 2) If "tool_use" is present, call the main actor's tool via `this.mcpClient.callTool()`.
+     * 3) Return or yield partial results so we can SSE them to the browser.
      */
-    async processQuery(query: string, messages: MessageParam[]): Promise<MessageParam[]> {
-        const msg = JSON.parse(JSON.stringify(messages));
-        msg.push({ role: 'user', content: query });
+    async processUserQuery(query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void): Promise<void> {
+        await this.connectToServer(); // ensure connected
+        this.conversation.push({ role: 'user', content: query });
+
         const response: Message = await this.anthropic.messages.create({
             model: this.modelName,
             max_tokens: this.modelMaxOutputTokens,
-            messages: msg,
+            messages: this.conversation,
             system: this.systemPrompt,
             tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         });
         log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
-        return await this.processMsg(response, msg);
+        await this.handleLLMResponse(response, sseEmit);
     }
 }

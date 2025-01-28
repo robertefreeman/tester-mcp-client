@@ -12,6 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { Actor } from 'apify';
+import cors from 'cors';
 import express from 'express';
 import type { Request, Response } from 'express';
 
@@ -19,9 +20,6 @@ import { processInput } from './input.js';
 import { log } from './logger.js';
 import { MCPClient } from './mcpClient.js';
 import type { Input } from './types.js';
-
-const filename = fileURLToPath(import.meta.url);
-const dirname = path.dirname(filename);
 
 await Actor.init();
 
@@ -31,9 +29,11 @@ const PORT = Actor.isAtHome() ? process.env.ACTOR_STANDBY_PORT : 3000;
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 // Serve your public folder (where index.html is located)
-// Adjust if you keep it in a different directory
+const filename = fileURLToPath(import.meta.url);
+const dirname = path.dirname(filename);
 app.use(express.static(path.join(dirname, 'public')));
 
 const input = await processInput((await Actor.getInput<Partial<Input>>()) ?? ({} as Input));
@@ -45,6 +45,11 @@ if (Actor.isAtHome()) {
     }
     input.headers = { ...input.headers, Authorization: `Bearer ${process.env.APIFY_TOKEN}` };
 }
+
+// 4) We'll store the SSE clients (browsers) in an array
+type SSEClient = { id: number; res: express.Response };
+let sseClients: SSEClient[] = [];
+let clientIdCounter = 0;
 
 // Create a single instance of your MCP client
 const client = new MCPClient(
@@ -58,46 +63,58 @@ const client = new MCPClient(
     input.toolCallTimeoutSec,
 );
 
-/**
- * POST /api/chat
- * Receives: { query: string, messages: MessageParam[] }
- * Returns: { newMessages: MessageParam[] }
- */
-app.post('/chat', async (req: Request, res: Response) : Promise<Response> => {
-    try {
-        log.debug('Received POST /api/chat:');
-        const { query, messages } = req.body;
-        if (!client.isConnected) {
-            // Connect to server once, the same way your original code does
-            // Pass the arguments needed for your server script if needed:
-            await client.connectToServer();
-        }
-        // process the query with your existing logic
-        const updatedMessages = await client.processQuery(query, messages);
+// 5) SSE endpoint for the client.js (browser) to connect to
+app.get('/sse', (req, res) => {
+    // Required headers for SSE
+    res.set({
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+    });
+    res.flushHeaders();
 
-        // newMessages = whatever was appended to messages by the call
-        // i.e. everything after the original length, also skip query message
-        const newMessages = updatedMessages.slice(messages.length + 1);
-        return res.json({ newMessages });
-    } catch (error) {
-        log.error(`Error in /chat: ${error}`);
-        res.status(500).json({ error: (error as Error).message || 'Internal server error' });
-        return res.end();
+    const clientId = ++clientIdCounter;
+    sseClients.push({ id: clientId, res });
+    console.log(`New SSE client: ${clientId}`);
+
+    // If client closes connection, remove from array
+    req.on('close', () => {
+        console.log(`SSE client disconnected: ${clientId}`);
+        sseClients = sseClients.filter((c) => c.id !== clientId);
+    });
+});
+
+// 6) POST /message from the browser
+app.post('/message', async (req, res) => {
+    const { query } = req.body;
+    if (!query) {
+        return res.status(400).json({ error: 'Missing "query" field' });
+    }
+    try {
+        // We call MyMcpClient, passing a callback that broadcasts SSE events
+        await client.processUserQuery(query, (role, content) => {
+            broadcastSSE({ role, content });
+        });
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('Error in processing user query:', err);
+        return res.json({ error: (err as Error).message });
     }
 });
+
+/**
+ * Broadcasts an event to all connected SSE clients
+ */
+function broadcastSSE(data: object) {
+    for (const c of sseClients) {
+        c.res.write(`data: ${JSON.stringify(data)}\n\n`);
+    }
+}
 
 app.use((req: Request, res: Response) => {
     res.status(404).json({ message: `There is nothing at route ${req.method} ${req.originalUrl}, use only root /` }).end();
 });
 
-if (STANDBY_MODE) {
-    log.info('Actor is running in the STANDBY mode.');
-    app.listen(PORT, () => {
-        log.info(`Open chatbot application at ${HOST}`);
-    });
-} else {
-    log.info('Actor is not designed to run in the NORMAL model');
-    app.listen(PORT, () => {
-        log.info(`Open chatbot application at ${HOST}`);
-    });
-}
+app.listen(PORT, () => {
+    console.log(`Client actor listening on port ${PORT}, SSE at /sse, message at /message`);
+});
