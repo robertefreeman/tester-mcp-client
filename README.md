@@ -24,6 +24,29 @@ The Apify MCP Client connects to a running MCP server over Server-Sent Events (S
 - Based on the LLM response, orchestrates tool calls and displays the conversation
 - Displays the conversation
 
+# ⚙️ Usage
+
+- Test any MCP server over SSE with a standalone client running on Apify
+- Test [Apify Actors MCP Server](https://apify.com/apify/actors-mcp-server) and ability to dynamically select amongst 3000+ tools
+
+## Standby Mode (on Apify)
+
+## Normal Mode (on Apify)
+
+## Examples
+
+Once you have the Tester MCP Client running, you can ask:
+- "What Apify Actors I can use"
+- "Which Actor is the best for scraping Instagram comments"
+- "Can you scrape the first 10 pages of Google search results for 'best restaurants in Prague'?"
+
+### Pricing
+
+The Apify MCP Client is free to use. You only pay for the resources you consume on the Apify platform.
+
+Running the MCP Client for 1 hour costs approximately $0.06.
+With the Apify Free tier (no credit card required 💳), you can run the MCP Client for 80 hours per month.
+Definitely enough to test your MCP server!
 
 ## How it works
 
@@ -43,26 +66,6 @@ This separates extra client-side logic from the core server, making it easier to
     - Optionally calls tools if required using
 6. For each result chunk, `sseEmit(role, content)`
 
-# ⚙️ Usage
-
-Once you have the Tester MCP Client running, you can ask:
-- "What Apify Actors I can use"
-- "Which Actor is the best for scraping Instagram comments"
-- "Can you scrape the first 10 pages of Google search results for 'best restaurants in Prague'?"
-
-## Standby Mode (on Apify)
-
-- Test any MCP server over SSE with a standalone client running on Apify
-- Test [Apify Actors MCP Server](https://apify.com/apify/actors-mcp-server) and ability to dynamically select amongst 3000+ tools
-- Request data from a remote Apify Actor (e.g., [Google Maps with contact details](https://apify.com/lukaskrivka/google-maps-with-contact-details)).
-
-### Pricing
-
-The Apify MCP Client is free to use. You only pay for the resources you consume on the Apify platform.
-
-Running the MCP Client for 1 hour costs approximately $0.06.
-With the Apify Free tier (no credit card required 💳), you can run the MCP Client for 80 hours per month.
-Definitely enough to test your MCP server!
 
 ## Local development
 

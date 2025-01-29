@@ -27,7 +27,7 @@ eventSource.onmessage = (event) => {
 
 eventSource.onerror = (err) => {
     console.error('SSE error:', err);
-    appendMessage('internal', `SSE connection error: ${err.message || err}`);
+    appendMessage('internal', `SSE connection error: ${JSON.stringify(err.message) || err}`);
 };
 
 /**

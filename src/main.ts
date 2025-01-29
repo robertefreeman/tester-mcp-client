@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 
 import { Actor } from 'apify';
 import cors from 'cors';
+import dotenv from 'dotenv';
 import express from 'express';
 import type { Request, Response } from 'express';
 
@@ -23,8 +24,20 @@ import type { Input } from './types.js';
 
 await Actor.init();
 
-const HOST = Actor.isAtHome() ? process.env.ACTOR_STANDBY_URL : 'http://localhost';
-const PORT = Actor.isAtHome() ? process.env.ACTOR_STANDBY_PORT : 3000;
+const STANDBY_MODE = Actor.getEnv().metaOrigin === 'STANDBY';
+let HOST: string | undefined;
+let PORT: string | undefined;
+
+if (Actor.isAtHome()) {
+    HOST = STANDBY_MODE ? process.env.ACTOR_STANDBY_URL : process.env.ACTOR_WEB_SERVER_URL;
+    PORT = Actor.isAtHome() ? process.env.ACTOR_STANDBY_PORT : process.env.ACTOR_WEB_SERVER_PORT;
+} else {
+    const filename = fileURLToPath(import.meta.url);
+    const dirname = path.dirname(filename);
+    dotenv.config({ path: path.resolve(dirname, '../.env') });
+    HOST = 'http://localhost';
+    PORT = '3000';
+}
 
 const app = express();
 app.use(express.json());
@@ -38,12 +51,6 @@ app.use(express.static(path.join(dirname, 'public')));
 const input = await processInput((await Actor.getInput<Partial<Input>>()) ?? ({} as Input));
 log.info(`Loaded input: ${JSON.stringify(input)} `);
 
-if (Actor.isAtHome()) {
-    if (!input.headers) {
-        input.headers = {};
-    }
-    input.headers = { ...input.headers, Authorization: `Bearer ${process.env.APIFY_TOKEN}` };
-}
 
 // 4) We'll store the SSE clients (browsers) in an array
 type SSEClient = { id: number; res: express.Response };
@@ -124,5 +131,6 @@ app.use((req: Request, res: Response) => {
 });
 
 app.listen(PORT, () => {
-    log.info(`Navigate ${HOST} in your browser to interact with an MCP server.`);
+    const url = Actor.isAtHome() ? HOST : `${HOST}:${PORT}`;
+    log.info(`Navigate to ${url} in your browser to interact with an MCP server.`);
 });
