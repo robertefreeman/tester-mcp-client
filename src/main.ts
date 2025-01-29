@@ -44,8 +44,7 @@ app.use(cors());
 
 // Serve your public folder (where index.html is located)
 const filename = fileURLToPath(import.meta.url);
-const dirname = path.dirname(filename);
-const publicPath = Actor.isAtHome() ? path.join(dirname, 'src', 'public') : path.join(dirname, 'public');
+const publicPath = path.join(path.dirname(filename), 'public');
 const publicUrl = Actor.isAtHome() ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
