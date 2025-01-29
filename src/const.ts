@@ -6,3 +6,5 @@ export const defaults = {
     maxNumberOfToolCalls: 5,
     toolCallTimeoutSec: 120,
 };
+
+export const MISSING_PARAMETER_ERROR = `Either provide parameter as Actor input or as query parameter: `;
