@@ -49,8 +49,8 @@ const publicUrl = Actor.isAtHome() ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
 const input = await processInput((await Actor.getInput<Partial<Input>>()) ?? ({} as Input));
-log.debug(`mcpServerUrl: ${input.mcpServerUrl}`);
 log.debug(`systemPrompt: ${input.systemPrompt}`);
+log.debug(`mcpSseUrl: ${input.mcpSseUrl}`);
 log.debug(`modelName: ${input.modelName}`);
 
 // 4) We'll store the SSE clients (browsers) in an array
@@ -60,7 +60,7 @@ let clientIdCounter = 0;
 
 // Create a single instance of your MCP client
 const client = new MCPClient(
-    input.mcpServerUrl,
+    input.mcpSseUrl,
     input.headers,
     input.systemPrompt,
     input.modelName,
@@ -112,7 +112,7 @@ app.post('/message', async (req, res) => {
 app.get('/client-info', (_req, res) => {
     // If you have these values in config or environment, adapt as needed.
     res.json({
-        mcpServerUrl: input.mcpServerUrl,
+        mcpSseUrl: input.mcpSseUrl,
         systemPrompt: input.systemPrompt,
         modelName: input.modelName,
         publicUrl,

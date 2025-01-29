@@ -9,8 +9,12 @@ import type { Input, StandbyInput } from './types.js';
 export async function processInput(originalInput: Partial<Input> | Partial<StandbyInput>): Promise<Input> {
     const input = { ...defaults, ...originalInput } as StandbyInput;
 
-    if (!input.mcpServerUrl) {
-        throw new Error(`MCP Server URL is not provided. ${MISSING_PARAMETER_ERROR}: 'mcpServerUrl'`);
+    if (!input.mcpSseUrl) {
+        throw new Error(`MCP Server SSE URL is not provided. ${MISSING_PARAMETER_ERROR}: 'mcpSseUrl'`);
+    }
+
+    if (!(input.mcpSseUrl.includes('/sse'))) {
+        throw new Error(`MCP Server SSE URL is invalid. Provide SSE endpoint with /sse path.`);
     }
 
     if (!input.headers) {

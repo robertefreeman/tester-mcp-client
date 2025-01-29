@@ -212,9 +212,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const resp = await fetch('/client-info');
         const data = await resp.json();
 
-        const mcpServerUrl = document.getElementById('mcpServerUrl');
-        if (mcpServerUrl) {
-            mcpServerUrl.textContent = data.mcpServerUrl;
+        const mcpSseUrl = document.getElementById('mcpSseUrl');
+        if (mcpSseUrl) {
+            mcpSseUrl.textContent = data.mcpSseUrl;
         }
         // Show the system prompt in a collapsible <details> (assuming you have <pre id="systemPromptPre">)
         const clientInfo = document.getElementById('clientInfo');
