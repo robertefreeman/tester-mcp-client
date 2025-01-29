@@ -7,7 +7,7 @@ import type { Input, StandbyInput } from './types.js';
  * @returns input
  */
 export async function processInput(originalInput: Partial<Input> | Partial<StandbyInput>): Promise<Input> {
-    const input = { ...originalInput, ...defaults } as StandbyInput;
+    const input = { ...defaults, ...originalInput } as StandbyInput;
 
     if (!input.mcpServerUrl) {
         throw new Error(`MCP Server URL is not provided. ${MISSING_PARAMETER_ERROR}: 'mcpServerUrl'`);

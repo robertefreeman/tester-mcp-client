@@ -49,7 +49,9 @@ const publicUrl = Actor.isAtHome() ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
 const input = await processInput((await Actor.getInput<Partial<Input>>()) ?? ({} as Input));
-log.info(`Loaded input: ${JSON.stringify(input)} `);
+log.debug(`mcpServerUrl: ${input.mcpServerUrl}`);
+log.debug(`systemPrompt: ${input.systemPrompt}`);
+log.debug(`modelName: ${input.modelName}`);
 
 // 4) We'll store the SSE clients (browsers) in an array
 type SSEClient = { id: number; res: express.Response };
