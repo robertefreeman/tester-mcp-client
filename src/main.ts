@@ -15,7 +15,6 @@ import { Actor } from 'apify';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
-import type { Request, Response } from 'express';
 
 import { processInput } from './input.js';
 import { log } from './logger.js';
@@ -46,11 +45,12 @@ app.use(cors());
 // Serve your public folder (where index.html is located)
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
-app.use(express.static(path.join(dirname, 'public')));
+const publicPath = Actor.isAtHome() ? path.join(dirname, 'src', 'public') : path.join(dirname, 'public');
+const publicUrl = Actor.isAtHome() ? HOST : `${HOST}:${PORT}`;
+app.use(express.static(publicPath));
 
 const input = await processInput((await Actor.getInput<Partial<Input>>()) ?? ({} as Input));
 log.info(`Loaded input: ${JSON.stringify(input)} `);
-
 
 // 4) We'll store the SSE clients (browsers) in an array
 type SSEClient = { id: number; res: express.Response };
@@ -114,6 +114,7 @@ app.get('/client-info', (_req, res) => {
         mcpServerUrl: input.mcpServerUrl,
         systemPrompt: input.systemPrompt,
         modelName: input.modelName,
+        publicUrl,
     });
 });
 
@@ -126,11 +127,11 @@ function broadcastSSE(data: object) {
     }
 }
 
-app.use((req: Request, res: Response) => {
-    res.status(404).json({ message: `There is nothing at route ${req.method} ${req.originalUrl}, use only root /` }).end();
+app.get('*', (_req, res) => {
+    res.sendFile(path.join(publicPath, 'index.html'));
 });
 
 app.listen(PORT, () => {
-    const url = Actor.isAtHome() ? HOST : `${HOST}:${PORT}`;
-    log.info(`Navigate to ${url} in your browser to interact with an MCP server.`);
+    log.info(`Serving from path ${path.join(publicPath, 'index.html')}`);
+    log.info(`Navigate to ${publicUrl} in your browser to interact with an MCP server.`);
 });

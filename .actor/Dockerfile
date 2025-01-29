@@ -46,12 +46,12 @@ RUN npm --quiet set progress=false \
 
 # Copy built JS files from builder image
 COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/src/public ./dist/public
 
 # Next, copy the remaining files and directories with the source code.
 # Since we do this after NPM install, quick build will be really fast
 # for most source file changes.
 COPY . ./
 
-
 # Run the image.
-CMD npm run start:prod --silent
+CMD ["npm", "run", "start:prod", "--silent"]

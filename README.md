@@ -26,12 +26,17 @@ The Apify MCP Client connects to a running MCP server over Server-Sent Events (S
 
 # ⚙️ Usage
 
-- Test any MCP server over SSE with a standalone client running on Apify
+- Test any MCP server over SSE
 - Test [Apify Actors MCP Server](https://apify.com/apify/actors-mcp-server) and ability to dynamically select amongst 3000+ tools
+
+## Normal Mode (on Apify)
+
+You can run the Tester MCP Client on Apify and connect it to any MCP server that supports SSE.
+This can be configured in the Apify UI or via the API.
+The parameters include the MCP server URL, the system prompt, and the API key.
 
 ## Standby Mode (on Apify)
 
-## Normal Mode (on Apify)
 
 ## Examples
 
