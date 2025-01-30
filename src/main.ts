@@ -25,12 +25,13 @@ import type { Input } from './types.js';
 await Actor.init();
 
 const STANDBY_MODE = Actor.getEnv().metaOrigin === 'STANDBY';
+const ACTOR_IS_AT_HOME = Actor.isAtHome();
 let HOST: string | undefined;
 let PORT: string | undefined;
 
-if (Actor.isAtHome()) {
+if (ACTOR_IS_AT_HOME) {
     HOST = STANDBY_MODE ? process.env.ACTOR_STANDBY_URL : process.env.ACTOR_WEB_SERVER_URL;
-    PORT = Actor.isAtHome() ? process.env.ACTOR_STANDBY_PORT : process.env.ACTOR_WEB_SERVER_PORT;
+    PORT = ACTOR_IS_AT_HOME ? process.env.ACTOR_STANDBY_PORT : process.env.ACTOR_WEB_SERVER_PORT;
 } else {
     const filename = fileURLToPath(import.meta.url);
     const dirname = path.dirname(filename);
@@ -46,7 +47,7 @@ app.use(cors());
 // Serve your public folder (where index.html is located)
 const filename = fileURLToPath(import.meta.url);
 const publicPath = path.join(path.dirname(filename), 'public');
-const publicUrl = Actor.isAtHome() ? HOST : `${HOST}:${PORT}`;
+const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
 const input = await processInput((await Actor.getInput<Partial<Input>>()) ?? ({} as Input));
