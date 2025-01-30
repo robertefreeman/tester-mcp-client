@@ -10,7 +10,7 @@ It is a standalone Actor server designed for testing MCP servers over SSE.
 - 🔌 Connects to an MCP server using Server-Sent Events (SSE)
 - 💬 Provides a chat-like UI for displaying tool calls and results
 - 🇦 Connects to an [Apify MCP Server](https://apify.com/apify/actors-mcp-server) for interacting with one or more Apify Actors
-- 💥 Dynamically loads and uses tools based on context and user queries (only if supported by a server)
+- 💥 Dynamically uses tools based on context and user queries (if supported by a server)
 - 🔓 Use Authorization headers and API keys for secure connections
 - 🪟 Open source, so you can review it, suggest improvements, or modify it
 
@@ -35,9 +35,9 @@ You can run the Tester MCP Client on Apify and connect it to any MCP server that
 Configuration can be done via the Apify UI or API by specifying parameters such as the MCP server URL, system prompt, and API key.
 
 Once you run Actor, check the logs for a link to the Tester MCP Client UI, where you can interact with the MCP server:
-
+The URL will look like this and will be different from run to run:
 ```shell
-INFO  Navigate to https://twczl6ikl3cg.runs.apify.net in your browser to interact with an MCP server.
+INFO  Navigate to https://......runs.apify.net in your browser to interact with an MCP server.
 ```
 
 ## Standby Mode (on Apify)
