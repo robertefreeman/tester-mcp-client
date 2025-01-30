@@ -192,6 +192,7 @@ export class MCPClient {
      */
     async processUserQuery(query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void): Promise<void> {
         await this.connectToServer(); // ensure connected
+        log.debug(`[internal] User query: ${JSON.stringify(query)}`);
         this.conversation.push({ role: 'user', content: query });
 
         const response: Message = await this.anthropic.messages.create({
