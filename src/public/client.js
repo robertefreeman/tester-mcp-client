@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 // client.js
 
-// ===== DOM Elements =====
+// ================== DOM ELEMENTS & GLOBAL STATE ==================
 const chatLog = document.getElementById('chatLog');
 const clearBtn = document.getElementById('clearBtn');
 const clientInfo = document.getElementById('clientInfo');
@@ -14,12 +14,12 @@ const sendBtn = document.getElementById('sendBtn');
 const spinner = document.getElementById('spinner');
 const statusIcon = document.getElementById('statusIcon');
 
-// Keep local messages for display (optional)
-const messages = [];
+const messages = []; // Local message array for display only
 
-/** 1) Immediately open SSE to /sse */
+// ================== SSE CONNECTION SETUP ==================
 const eventSource = new EventSource('/sse');
 
+// Handle incoming SSE messages
 eventSource.onmessage = (event) => {
     let data;
     try {
@@ -28,49 +28,73 @@ eventSource.onmessage = (event) => {
         console.warn('Could not parse SSE event as JSON:', event.data);
         return;
     }
-    // data should be { role, content }
+    // data = { role, content }
     appendMessage(data.role, data.content);
 };
 
+// Handle SSE errors
 eventSource.onerror = (err) => {
     console.error('SSE error:', err);
     appendMessage('internal', `SSE connection error: ${JSON.stringify(err.message) || err}`);
 };
 
-// Then call connectSSE as soon as the browser is ready:
-document.addEventListener('DOMContentLoaded', () => {
+// ================== ON PAGE LOAD (DOMContentLoaded) ==================
+//  - Fetch client info
+//  - Set up everything else
+document.addEventListener('DOMContentLoaded', async () => {
+    // Immediately call /client-info
+    try {
+        const resp = await fetch('/client-info');
+        const data = await resp.json();
+
+        if (mcpSseUrl) {
+            mcpSseUrl.textContent = data.mcpSseUrl;
+        }
+        if (clientInfo) {
+            clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
+        }
+        if (information) {
+            information.innerHTML = `${data.information}`;
+        }
+    } catch (err) {
+        console.error('Error fetching client info:', err);
+    }
+
+    // Then attempt reconnect once the page is ready
     reconnect();
 });
 
+// ================== 4) MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
+
 /**
- * 2) Main function to append messages to the chat.
- *    If content is an array with tool blocks, we separate them out.
+ * appendMessage(role, content):
+ *   If content is an array (potential tool blocks),
+ *   handle each item separately; otherwise just show a normal bubble.
  */
 function appendMessage(role, content) {
     messages.push({ role, content });
 
     if (Array.isArray(content)) {
-        // We got an array. Possibly tool calls or multiple blocks
-        for (const item of content) {
+        content.forEach((item) => {
             if (item.type === 'tool_use' || item.type === 'tool_result') {
                 appendToolBlock(item);
             } else {
-                // If it's not recognized as a tool block, treat it as normal content
                 appendSingleBubble(role, item);
             }
-        }
+        });
     } else {
-        // Normal single content (string, object, etc.)
+        // normal single content
         appendSingleBubble(role, content);
     }
 }
 
 /**
- * 3) Append a single bubble row for normal user/assistant/internal text.
+ * appendSingleBubble(role, content): Renders a normal user/assistant/internal bubble
  */
 function appendSingleBubble(role, content) {
     const row = document.createElement('div');
     row.className = 'message-row';
+
     if (role === 'user') {
         row.classList.add('user-message');
     } else if (role === 'assistant') {
@@ -89,14 +113,12 @@ function appendSingleBubble(role, content) {
 }
 
 /**
- * 4) Append a separate row for tool_use/tool_result,
- *    so it doesn't appear in the user or assistant bubble.
+ * appendToolBlock(item): Renders a separate row for tool_use/tool_result
  */
 function appendToolBlock(item) {
     const row = document.createElement('div');
     row.className = 'message-row tool-row';
 
-    // We'll put everything in a "tool-block" container (no bubble)
     const container = document.createElement('div');
     container.className = 'tool-block';
 
@@ -108,16 +130,14 @@ function appendToolBlock(item) {
     <strong>ID:</strong> ${item.id || 'unknown'}
   </div>
   ${formatAnyContent(item.input)}
-</details>
-`;
+</details>`;
     } else if (item.type === 'tool_result') {
         const summary = item.is_error ? 'Tool result (Error)' : 'Tool result';
         container.innerHTML = `
 <details>
   <summary>${summary}</summary>
   ${formatAnyContent(item.content)}
-</details>
-`;
+</details>`;
     }
 
     row.appendChild(container);
@@ -125,11 +145,7 @@ function appendToolBlock(item) {
     chatLog.scrollTop = chatLog.scrollHeight;
 }
 
-/**
- * 5) Format content:
- *    - If string: attempt naive JSON parse → fallback markdown
- *    - If object: show as JSON
- */
+// ================== UTILITY FOR FORMATTING CONTENT (JSON, MD, ETC.) ==================
 function formatAnyContent(content) {
     if (typeof content === 'string') {
         // Try JSON parse
@@ -137,41 +153,36 @@ function formatAnyContent(content) {
             const obj = JSON.parse(content);
             return `<pre>${escapeHTML(JSON.stringify(obj, null, 2))}</pre>`;
         } catch {
-            // Not JSON → fallback to markdown
+            // fallback to markdown
             return formatMarkdown(content);
         }
     }
 
     if (content && typeof content === 'object') {
-        // If it's an object (not array), show JSON
+        // plain object → JSON
         return `<pre>${escapeHTML(JSON.stringify(content, null, 2))}</pre>`;
     }
 
-    // fallback for numbers, booleans, etc.
+    // fallback
     return String(content);
 }
 
-/**
- * Naive markdown transform for code blocks, inline code, bold, italics, links
- */
+/** A naive Markdown transform */
 function formatMarkdown(text) {
     let safe = escapeHTML(text);
-    // Fenced code blocks
+    // code fences
     safe = safe.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-    // Inline code
+    // inline code
     safe = safe.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // Bold
+    // bold, italics, links, newlines
     safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    // Italics
     safe = safe.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    // Links [text](url)
     safe = safe.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-    // Newlines
     safe = safe.replace(/\n/g, '<br>');
     return safe;
 }
 
-/** Escape special HTML chars */
+/** HTML escaper for <pre> blocks, etc. */
 function escapeHTML(str) {
     if (typeof str !== 'string') return String(str);
     return str
@@ -180,12 +191,10 @@ function escapeHTML(str) {
         .replace(/>/g, '&gt;');
 }
 
-/**
- * 6) Send user query to /message (POST)
- */
+// ================== SENDING A USER QUERY (POST /message) ==================
 async function sendQuery(query) {
     spinner.style.display = 'inline-block'; // show spinner
-    appendMessage('user', query); // local echo
+    appendMessage('user', query);
 
     try {
         const resp = await fetch('/message', {
@@ -204,42 +213,7 @@ async function sendQuery(query) {
     }
 }
 
-/** 7) Attach event listeners */
-sendBtn.addEventListener('click', () => {
-    const query = queryInput.value.trim();
-    if (query) {
-        sendQuery(query);
-        queryInput.value = '';
-    }
-});
-
-queryInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        sendBtn.click();
-    }
-});
-
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const resp = await fetch('/client-info');
-        const data = await resp.json();
-
-        if (mcpSseUrl) {
-            mcpSseUrl.textContent = data.mcpSseUrl;
-        }
-        // Show the system prompt in a collapsible <details> (assuming you have <pre id="systemPromptPre">)
-        if (clientInfo) {
-            clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
-        }
-
-        if (information) {
-            information.innerHTML = `${data.information}`;
-        }
-    } catch (err) {
-        console.error('Error fetching client info:', err);
-    }
-});
-
+// ================== CLEAR CONVERSATION LOG (POST /conversation/reset) ==================
 clearBtn.addEventListener('click', async () => {
     try {
         messages.length = 0;
@@ -257,6 +231,8 @@ clearBtn.addEventListener('click', async () => {
     }
 });
 
+// ================== SERVER CONNECTIVITY CHECKS & RECONNECT LOGIC ==================
+
 async function checkConnection() {
     fetch('/pingMcpServer')
         .then((resp) => resp.json())
@@ -273,7 +249,7 @@ async function checkConnection() {
         });
 }
 
-async function reconnect() {
+function reconnect() {
     fetch('/reconnect', { method: 'POST' })
         .then((resp) => resp.json())
         .then((data) => {
@@ -300,13 +276,30 @@ function updateMcpServerStatus(status) {
     }
 }
 
+// Reconnect button logic
 reconnectBtn.addEventListener('click', async () => {
     mcpServerStatus.textContent = 'Reconnecting...';
     /* eslint-disable-next-line no-promise-executor-return */
     await new Promise((resolve) => setTimeout(resolve, 500));
-    await reconnect();
+    reconnect();
 });
 
+// Periodically check the connection status
 setInterval(async () => {
     await checkConnection();
 }, 5000);
+
+// ================== SEND BUTTON, ENTER KEY HANDLER ==================
+sendBtn.addEventListener('click', () => {
+    const query = queryInput.value.trim();
+    if (query) {
+        sendQuery(query);
+        queryInput.value = '';
+    }
+});
+
+queryInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        sendBtn.click();
+    }
+});
