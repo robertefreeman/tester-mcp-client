@@ -179,7 +179,9 @@ export class MCPClient {
                     system: this.systemPrompt,
                     tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
                 });
+                log.debug('[internal] Received response from model');
                 await this.handleLLMResponse(nextResponse, sseEmit, toolCallCount + 1);
+                log.debug('[internal] Finished processing tool result');
             }
         }
     }
