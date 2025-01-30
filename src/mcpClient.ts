@@ -91,6 +91,10 @@ export class MCPClient {
         return this._isConnected;
     }
 
+    resetConversation() {
+        this.conversation = [];
+    }
+
     async updateTools() {
         const response = await this.client.listTools();
         this.tools = response.tools.map((x) => ({

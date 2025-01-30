@@ -115,8 +115,13 @@ app.get('/client-info', (_req, res) => {
         mcpSseUrl: input.mcpSseUrl,
         systemPrompt: input.systemPrompt,
         modelName: input.modelName,
-        publicUrl,
+        publicUrl: publicUrl,
     });
+});
+
+app.post('/conversation/reset', (_req, res) => {
+    client.resetConversation();
+    res.json({ ok: true });
 });
 
 /**

@@ -5,6 +5,7 @@
 const chatLog = document.getElementById('chatLog');
 const queryInput = document.getElementById('queryInput');
 const sendBtn = document.getElementById('sendBtn');
+const clearBtn = document.getElementById('clearBtn');
 const spinner = document.getElementById('spinner');
 
 // Keep local messages for display (optional)
@@ -223,5 +224,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch (err) {
         console.error('Error fetching client info:', err);
+    }
+});
+
+clearBtn.addEventListener('click', async () => {
+    try {
+        messages.length = 0;
+        chatLog.innerHTML = '';
+
+        const resp = await fetch('/conversation/reset', { method: 'POST' });
+        const data = await resp.json();
+        if (data.error) {
+            console.error('Server error when resetting conversation:', data.error);
+        } else {
+            console.log('Server conversation reset');
+        }
+    } catch (err) {
+        console.error('Error resetting conversation:', err);
     }
 });
