@@ -16,6 +16,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 
+import { BASIC_INFORMATION } from './const.js';
 import { processInput } from './input.js';
 import { log } from './logger.js';
 import { MCPClient } from './mcpClient.js';
@@ -109,16 +110,47 @@ app.post('/message', async (req, res) => {
     }
 });
 
+/**
+ * Periodically check if the main server is still reachable.
+ */
+app.get('/pingMcpServer', async (_req, res) => {
+    try {
+        // Attempt to ping the main MCP server
+        const response = await client.isConnected();
+        res.json({ status: response });
+    } catch (err) {
+        res.json({ status: 'Not connected', error: (err as Error).message });
+    }
+});
+
+app.post('/reconnect', async (_req, res) => {
+    try {
+        log.debug('Reconnecting to main server');
+        await client.connectToServer();
+        const response = await client.isConnected();
+        res.json({ status: response });
+    } catch (err) {
+        log.error(`Error reconnecting to main server: ${err}`);
+        res.json({ status: 'Not connected', error: (err as Error).message });
+    }
+});
+
+/**
+ * GET /client-info endpoint to provide the client with necessary information
+ */
 app.get('/client-info', (_req, res) => {
-    // If you have these values in config or environment, adapt as needed.
     res.json({
         mcpSseUrl: input.mcpSseUrl,
         systemPrompt: input.systemPrompt,
         modelName: input.modelName,
-        publicUrl: publicUrl,
+        publicUrl,
+        information: BASIC_INFORMATION,
     });
 });
 
+/**
+ * POST /conversation/reset to reset the conversation
+ */
 app.post('/conversation/reset', (_req, res) => {
     client.resetConversation();
     res.json({ ok: true });

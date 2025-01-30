@@ -8,3 +8,9 @@ export const defaults = {
 };
 
 export const MISSING_PARAMETER_ERROR = `Either provide parameter as Actor input or as query parameter: `;
+
+export const BASIC_INFORMATION = 'Once you have the Tester MCP Client running, you can ask:\n'
+    + '- "What Apify Actors I can use"\n'
+    + '- "Which Actor is the best for scraping Instagram comments"\n'
+    + "- \"Can you scrape the first 10 pages of Google search results for 'best restaurants in Prague'?\"\n"
+    + '\n';

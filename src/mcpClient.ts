@@ -64,7 +64,7 @@ export class MCPClient {
      * Connect to the server using stdio transport and list available tools.
      */
     async connectToServer() {
-        if (this.isConnected) return;
+        if (this._isConnected) return;
         const { customHeaders } = this;
         const transport = new SSEClientTransport(
             new URL(this.serverUrl),
@@ -84,11 +84,20 @@ export class MCPClient {
         );
         await this.client.connect(transport);
         await this.updateTools();
-        this._isConnected = true;
     }
 
-    get isConnected() {
-        return this._isConnected;
+    async isConnected() {
+        try {
+            await this.client.ping();
+            this._isConnected = true;
+            return 'OK';
+        } catch (error) {
+            this._isConnected = false;
+            if (error instanceof Error) {
+                return error.message;
+            }
+            return String(error);
+        }
     }
 
     resetConversation() {

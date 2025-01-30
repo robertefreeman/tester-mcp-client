@@ -3,10 +3,16 @@
 
 // ===== DOM Elements =====
 const chatLog = document.getElementById('chatLog');
-const queryInput = document.getElementById('queryInput');
-const sendBtn = document.getElementById('sendBtn');
 const clearBtn = document.getElementById('clearBtn');
+const clientInfo = document.getElementById('clientInfo');
+const information = document.getElementById('information');
+const mcpServerStatus = document.getElementById('mcpServerStatus');
+const mcpSseUrl = document.getElementById('mcpSseUrl');
+const queryInput = document.getElementById('queryInput');
+const reconnectBtn = document.getElementById('reconnectBtn');
+const sendBtn = document.getElementById('sendBtn');
 const spinner = document.getElementById('spinner');
+const statusIcon = document.getElementById('statusIcon');
 
 // Keep local messages for display (optional)
 const messages = [];
@@ -30,6 +36,11 @@ eventSource.onerror = (err) => {
     console.error('SSE error:', err);
     appendMessage('internal', `SSE connection error: ${JSON.stringify(err.message) || err}`);
 };
+
+// Then call connectSSE as soon as the browser is ready:
+document.addEventListener('DOMContentLoaded', () => {
+    reconnect();
+});
 
 /**
  * 2) Main function to append messages to the chat.
@@ -213,14 +224,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         const resp = await fetch('/client-info');
         const data = await resp.json();
 
-        const mcpSseUrl = document.getElementById('mcpSseUrl');
         if (mcpSseUrl) {
             mcpSseUrl.textContent = data.mcpSseUrl;
         }
         // Show the system prompt in a collapsible <details> (assuming you have <pre id="systemPromptPre">)
-        const clientInfo = document.getElementById('clientInfo');
         if (clientInfo) {
             clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
+        }
+
+        if (information) {
+            information.innerHTML = `${data.information}`;
         }
     } catch (err) {
         console.error('Error fetching client info:', err);
@@ -243,3 +256,57 @@ clearBtn.addEventListener('click', async () => {
         console.error('Error resetting conversation:', err);
     }
 });
+
+async function checkConnection() {
+    fetch('/pingMcpServer')
+        .then((resp) => resp.json())
+        .then((data) => {
+            if (mcpServerStatus) {
+                updateMcpServerStatus(data.status);
+            }
+        })
+        .catch((err) => {
+            console.error('Network error calling /pingMcpServer:', err);
+            if (mcpServerStatus) {
+                mcpServerStatus.textContent = 'Network error';
+            }
+        });
+}
+
+async function reconnect() {
+    fetch('/reconnect', { method: 'POST' })
+        .then((resp) => resp.json())
+        .then((data) => {
+            if (mcpServerStatus) {
+                updateMcpServerStatus(data.status);
+            }
+        })
+        .catch((err) => {
+            console.error('Network error calling /reconnect:', err);
+            if (mcpServerStatus) {
+                updateMcpServerStatus('Network error');
+            }
+        });
+}
+
+function updateMcpServerStatus(status) {
+    const isOk = status === true || status === 'OK';
+    if (isOk) {
+        statusIcon.style.backgroundColor = 'green';
+        mcpServerStatus.textContent = 'OK';
+    } else {
+        statusIcon.style.backgroundColor = 'red';
+        mcpServerStatus.textContent = 'Disconnected';
+    }
+}
+
+reconnectBtn.addEventListener('click', async () => {
+    mcpServerStatus.textContent = 'Reconnecting...';
+    /* eslint-disable-next-line no-promise-executor-return */
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await reconnect();
+});
+
+setInterval(async () => {
+    await checkConnection();
+}, 5000);

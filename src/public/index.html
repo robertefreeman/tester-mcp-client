@@ -110,16 +110,39 @@
 </head>
 <body>
 <div id="chatContainer">
-    <div>
-        <strong>MCP Server URL <span id="mcpSseUrl" style="display: inline;"></span></strong>
-    </div>
+    <h2>Actors MCP Client</h2>
     <details style="margin: 8px 0;">
-        <summary>Information</summary>
+        <summary>Client settings (model name, system prompt)</summary>
         <pre id="clientInfo"></pre>
     </details>
-    <h2>Actors MCP Client</h2>
+    <details style="margin: 8px 0;">
+        <summary>Information</summary>
+        <pre id="information"></pre>
+    </details>
+    <div>
+        MCP Server SSE URL: <span id="mcpSseUrl" style="display: inline;"></span>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+        <!-- Left side: Status + Reconnect -->
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span>MCP Server Status:</span>
+            <!-- Circle icon for status: green or red -->
+            <span id="statusIcon"
+                  style="
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: gray;
+          ">
+    </span>
+            <span id="mcpServerStatus">Unknown</span>
+            <button id="reconnectBtn">Reconnect</button>
+        </div>
+        <!-- Right side: Delete Conversation -->
+        <button id="clearBtn">Delete Conversation</button>
+    </div>
     <div id="chatLog"></div>
-
     <div id="inputRow">
         <label for="queryInput"></label><textarea id="queryInput" rows="2" placeholder="Type message..."></textarea>
         <button id="sendBtn">Send</button>
