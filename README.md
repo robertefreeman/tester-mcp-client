@@ -14,7 +14,7 @@ It is a standalone Actor server designed for testing MCP servers over SSE.
 - 🔓 Use Authorization headers and API keys for secure connections
 - 🪟 Open source, so you can review it, suggest improvements, or modify it
 
-# 🎯 What does Tester MCP Client do?
+## 🎯 What does Tester MCP Client do?
 
 The Apify MCP Client connects to a running MCP server over Server-Sent Events (SSE) and it does the following:
 
@@ -24,12 +24,12 @@ The Apify MCP Client connects to a running MCP server over Server-Sent Events (S
 - Based on the LLM response, orchestrates tool calls and displays the conversation
 - Displays the conversation
 
-# ⚙️ Usage
+## ⚙️ Usage
 
 - Test any MCP server over SSE
 - Test [Apify Actors MCP Server](https://apify.com/apify/actors-mcp-server) and ability to dynamically select amongst 3000+ tools
 
-## Normal Mode (on Apify)
+### Normal Mode (on Apify)
 
 You can run the Tester MCP Client on Apify and connect it to any MCP server that supports SSE.
 Configuration can be done via the Apify UI or API by specifying parameters such as the MCP server URL, system prompt, and API key.
@@ -40,18 +40,18 @@ The URL will look like this and will be different from run to run:
 INFO  Navigate to https://......runs.apify.net in your browser to interact with an MCP server.
 ```
 
-## Standby Mode (on Apify)
+### Standby Mode (on Apify)
 
 In progress 🚧
 
-## Examples
+### Examples
 
 Once you have the Tester MCP Client running, you can ask:
 - "What Apify Actors I can use"
 - "Which Actor is the best for scraping Instagram comments"
 - "Can you scrape the first 10 pages of Google search results for 'best restaurants in Prague'?"
 
-### Pricing
+#### Pricing
 
 The Apify MCP Client is free to use. You only pay for the resources you consume on the Apify platform.
 
@@ -59,7 +59,7 @@ Running the MCP Client for 1 hour costs approximately $0.06.
 With the Apify Free tier (no credit card required 💳), you can run the MCP Client for 80 hours per month.
 Definitely enough to test your MCP server!
 
-## How it works
+### How it works
 
 ```plaintext
 Browser ← (SSE) → Tester MCP Clinent  ← (SSE) → MCP Server
@@ -78,7 +78,7 @@ This separates extra client-side logic from the core server, making it easier to
 6. For each result chunk, `sseEmit(role, content)`
 
 
-## Local development
+### Local development
 
 The Tester MCP Client Actor is open source and available on [GitHub](https://github.com/apify/rag-web-browser), allowing you to modify and develop it as needed.
 
@@ -112,7 +112,7 @@ Navigate to [http://localhost:3000](http://localhost:3000) in your browser to in
 
 **Happy chatting with Apify Actors!**
 
-# ⓘ Limitations and feedback
+## ⓘ Limitations and feedback
 
 The client does not support all MCP features, such as Prompts and Resource.
 Also, it does not store the conversation, so refreshing the page will clear the chat history.
