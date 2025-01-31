@@ -1,0 +1,9 @@
+{
+  "actorSpecification": 1,
+  "name": "apify-mcp-client",
+  "title": "Model Context Protocol Client for Apify Actors",
+  "description": "Client for the Model Context Protocol (MCP) for Apify Actors",
+  "version": "0.1",
+  "input": "./input_schema.json",
+  "dockerfile": "./Dockerfile"
+}
