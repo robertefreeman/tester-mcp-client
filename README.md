@@ -1,6 +1,6 @@
 # Tester Client for Model Context Protocol (MCP)
 
-[![Actors MCP Client](https://apify.com/actor-badge?actor=jiri.spilka/tester-mcp-client)](https://apify.com/jiri.spilka/tester-mcp-client)
+[//]: # ([![Actors MCP Client]&#40;https://apify.com/actor-badge?actor=jiri.spilka/tester-mcp-client&#41;]&#40;https://apify.com/jiri.spilka/tester-mcp-client&#41;)
 
 Implementation of a model context protocol (MCP) client that connects to an MCP server using Server-Sent Events (SSE) and displays the conversation in a chat-like UI.
 It is a standalone Actor server designed for testing MCP servers over SSE.
