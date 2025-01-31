@@ -62,7 +62,7 @@ Definitely enough to test your MCP server!
 ### How it works
 
 ```plaintext
-Browser ← (SSE) → Tester MCP Clinent  ← (SSE) → MCP Server
+Browser ← (SSE) → Tester MCP Client  ← (SSE) → MCP Server
 ```
 We create this chain to keep any custom bridging logic inside the Tester MCP Client, while leaving the main MCP Server unchanged.
 The browser uses SSE to communicate with the Tester MCP Client, and the Tester MCP Client relies on SSE to talk to the MCP Server.

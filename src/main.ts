@@ -50,7 +50,7 @@ const publicPath = path.join(path.dirname(filename), 'public');
 const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
-const input = await processInput((await Actor.getInput<Partial<Input>>()) ?? ({} as Input));
+const input = processInput((await Actor.getInput<Partial<Input>>()) ?? ({} as Input));
 log.debug(`systemPrompt: ${input.systemPrompt}`);
 log.debug(`mcpSseUrl: ${input.mcpSseUrl}`);
 log.debug(`modelName: ${input.modelName}`);

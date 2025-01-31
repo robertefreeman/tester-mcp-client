@@ -6,7 +6,7 @@ import type { Input, StandbyInput } from './types.js';
  * @param originalInput
  * @returns input
  */
-export async function processInput(originalInput: Partial<Input> | Partial<StandbyInput>): Promise<Input> {
+export function processInput(originalInput: Partial<Input> | Partial<StandbyInput>): Input {
     const input = { ...defaults, ...originalInput } as StandbyInput;
 
     if (!input.mcpSseUrl) {
