@@ -280,7 +280,7 @@ function updateMcpServerStatus(status) {
 reconnectBtn.addEventListener('click', async () => {
     mcpServerStatus.textContent = 'Reconnecting...';
     /* eslint-disable-next-line no-promise-executor-return */
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     reconnect();
 });
 
