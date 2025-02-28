@@ -30,7 +30,7 @@ export class MCPClient {
     private readonly systemPrompt: string;
     private readonly modelName: string;
     private readonly modelMaxOutputTokens: number;
-    private readonly maxNumberOfToolCalls: number;
+    private readonly maxNumberOfToolCallsPerQuery: number;
     private readonly toolCallTimeoutSec: number;
     private client = new Client(
         { name: 'example-client', version: '0.1.0' },
@@ -46,7 +46,7 @@ export class MCPClient {
         modelName: string,
         apiKey: string,
         modelMaxOutputTokens: number,
-        maxNumberOfToolCalls: number,
+        maxNumberOfToolCallsPerQuery: number,
         toolCallTimeoutSec: number,
     ) {
         this.serverUrl = serverUrl;
@@ -54,7 +54,7 @@ export class MCPClient {
         this.customHeaders = headers;
         this.modelName = modelName;
         this.modelMaxOutputTokens = modelMaxOutputTokens;
-        this.maxNumberOfToolCalls = maxNumberOfToolCalls;
+        this.maxNumberOfToolCallsPerQuery = maxNumberOfToolCallsPerQuery;
         this.toolCallTimeoutSec = toolCallTimeoutSec;
         this.anthropic = new Anthropic({ apiKey });
     }
@@ -130,9 +130,19 @@ export class MCPClient {
                 this.conversation.push({ role: 'assistant', content: block.text || '' });
                 sseEmit('assistant', block.text || '');
             } else if (block.type === 'tool_use') {
-                if (toolCallCount > this.maxNumberOfToolCalls) {
-                    this.conversation.push({ role: 'assistant', content: `Too many tool calls!` });
-                    sseEmit('assistant', `Too many tool calls! Limit is ${this.maxNumberOfToolCalls}`);
+                if (toolCallCount > this.maxNumberOfToolCallsPerQuery) {
+                    const msg = `Too many tool calls in a single turn! Limit is ${this.maxNumberOfToolCallsPerQuery}.
+                        You can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
+                    this.conversation.push({ role: 'assistant', content: msg });
+                    sseEmit('assistant', msg);
+                    const finalResponse = await this.anthropic.messages.create({
+                        model: this.modelName,
+                        max_tokens: this.modelMaxOutputTokens,
+                        messages: this.conversation,
+                        system: this.systemPrompt,
+                        tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+                    });
+                    this.conversation.push({ role: 'assistant', content: finalResponse.content || '' });
                     return;
                 }
                 const msgAssistant = {
@@ -192,7 +202,7 @@ export class MCPClient {
      * 2) If "tool_use" is present, call the main actor's tool via `this.mcpClient.callTool()`.
      * 3) Return or yield partial results so we can SSE them to the browser.
      */
-    async processUserQuery(query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void): Promise<void> {
+    async processUserQuery(query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void): Promise<Message> {
         await this.connectToServer(); // ensure connected
         log.debug(`[internal] User query: ${JSON.stringify(query)}`);
         this.conversation.push({ role: 'user', content: query });
@@ -205,6 +215,8 @@ export class MCPClient {
             tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         });
         log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
+        log.debug(`[internal] Token count: ${JSON.stringify(response.usage)}`);
         await this.handleLLMResponse(response, sseEmit);
+        return response;
     }
 }

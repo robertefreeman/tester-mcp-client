@@ -11,10 +11,23 @@ const mcpSseUrl = document.getElementById('mcpSseUrl');
 const queryInput = document.getElementById('queryInput');
 const reconnectBtn = document.getElementById('reconnectBtn');
 const sendBtn = document.getElementById('sendBtn');
-const spinner = document.getElementById('spinner');
 const statusIcon = document.getElementById('statusIcon');
 
 const messages = []; // Local message array for display only
+const timeoutCheckDelay = 20000; // 20 seconds between checks
+let timeoutCheckInterval = null; // Will store the interval ID
+
+let connectionAttempts = 0;
+const maxAttempts = 12; // Try for up to 2 minutes (12 * 10 seconds)
+const retryDelay = 10000; // 10 seconds between attempts
+
+// Add status message constants
+const STATUS = {
+    CONNECTED: 'Connected',
+    CONNECTING: 'Connecting',
+    FAILED: 'Connection failed',
+    FAILED_TIMEOUT: 'Failed to connect after multiple attempts',
+};
 
 // ================== SSE CONNECTION SETUP ==================
 const eventSource = new EventSource('/sse');
@@ -41,27 +54,39 @@ eventSource.onerror = (err) => {
 // ================== ON PAGE LOAD (DOMContentLoaded) ==================
 //  - Fetch client info
 //  - Set up everything else
+
+// Initial connection on page load
 document.addEventListener('DOMContentLoaded', async () => {
-    // Immediately call /client-info
+    // Fetch client info first
     try {
         const resp = await fetch('/client-info');
         const data = await resp.json();
-
-        if (mcpSseUrl) {
-            mcpSseUrl.textContent = data.mcpSseUrl;
-        }
-        if (clientInfo) {
-            clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
-        }
-        if (information) {
-            information.innerHTML = `${data.information}`;
-        }
+        if (mcpSseUrl) mcpSseUrl.textContent = data.mcpSseUrl;
+        if (clientInfo) clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
+        if (information) information.innerHTML = `${data.information}`;
     } catch (err) {
         console.error('Error fetching client info:', err);
     }
 
-    // Then attempt reconnect once the page is ready
-    reconnect();
+    // Start connection attempt loop
+    await attemptConnection(true);
+
+    // Add this near the DOMContentLoaded event listener
+    window.addEventListener('beforeunload', async (event) => {
+        // Note: Most modern browsers require the event to be handled synchronously
+        // and don't allow async operations during beforeunload
+        try {
+            // Synchronous fetch using XMLHttpRequest
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/conversation/reset', false);  // false makes it synchronous
+            xhr.send();
+            
+            messages.length = 0;
+            chatLog.innerHTML = '';
+        } catch (err) {
+            console.error('Error resetting conversation on page reload:', err);
+        }
+    });
 });
 
 // ================== 4) MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
@@ -126,7 +151,7 @@ function appendToolBlock(item) {
         container.innerHTML = `
 <details>
   <summary>Tool use: <strong>${item.name}</strong></summary>
-  <div style="font-size: 0.9rem; margin: 6px 0;">
+  <div style="font-size: 0.875rem; margin: 0.5rem 0;">
     <strong>ID:</strong> ${item.id || 'unknown'}
   </div>
   ${formatAnyContent(item.input)}
@@ -193,8 +218,25 @@ function escapeHTML(str) {
 
 // ================== SENDING A USER QUERY (POST /message) ==================
 async function sendQuery(query) {
-    spinner.style.display = 'inline-block'; // show spinner
+    // Create and show typing indicator
+    const loadingRow = document.createElement('div');
+    loadingRow.className = 'message-row';
+    loadingRow.innerHTML = `
+        <div class="bubble loading">
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+    `;
+
+    // First append the user message
     appendMessage('user', query);
+
+    // Then insert loading indicator as the last child of chatLog
+    chatLog.appendChild(loadingRow);
+    chatLog.scrollTop = chatLog.scrollHeight;
 
     try {
         const resp = await fetch('/message', {
@@ -209,7 +251,10 @@ async function sendQuery(query) {
     } catch (err) {
         appendMessage('internal', `Network error: ${err.message}`);
     } finally {
-        spinner.style.display = 'none'; // hide spinner
+        // Remove loading indicator
+        if (loadingRow.parentNode === chatLog) {
+            loadingRow.remove();
+        }
     }
 }
 
@@ -233,61 +278,116 @@ clearBtn.addEventListener('click', async () => {
 
 // ================== SERVER CONNECTIVITY CHECKS & RECONNECT LOGIC ==================
 
-async function checkConnection() {
-    fetch('/pingMcpServer')
-        .then((resp) => resp.json())
-        .then((data) => {
-            if (mcpServerStatus) {
-                updateMcpServerStatus(data.status);
-            }
-        })
-        .catch((err) => {
-            console.error('Network error calling /pingMcpServer:', err);
-            if (mcpServerStatus) {
-                mcpServerStatus.textContent = 'Network error';
-            }
-        });
-}
+async function attemptConnection(isInitial = false) {
+    if (isInitial) {
+        if (connectionAttempts >= maxAttempts) {
+            updateMcpServerStatus(STATUS.FAILED);
+            appendMessage('internal', `${STATUS.FAILED_TIMEOUT}. Please try reconnecting manually.`);
+            return;
+        }
+        connectionAttempts++;
+        updateMcpServerStatus(STATUS.CONNECTING);
+        // Add attempt counter inline with smaller font
+        const attemptText = document.createElement('small');
+        attemptText.style.cssText = `
+            margin-left: 0.25rem;
+            opacity: 0.7;
+            font-size: 0.8em;
+            white-space: nowrap;
+            display: inline-block;
+        `;
+        attemptText.textContent = `(${connectionAttempts}/${maxAttempts})`;
+        mcpServerStatus.firstElementChild.appendChild(attemptText);
+    }
 
-function reconnect() {
-    fetch('/reconnect', { method: 'POST' })
-        .then((resp) => resp.json())
-        .then((data) => {
-            if (mcpServerStatus) {
-                updateMcpServerStatus(data.status);
-            }
-        })
-        .catch((err) => {
-            console.error('Network error calling /reconnect:', err);
-            if (mcpServerStatus) {
-                updateMcpServerStatus('Network error');
-            }
-        });
-}
+    try {
+        await fetch('/reconnect', { method: 'POST' });
 
-function updateMcpServerStatus(status) {
-    const isOk = status === true || status === 'OK';
-    if (isOk) {
-        statusIcon.style.backgroundColor = 'green';
-        mcpServerStatus.textContent = 'OK';
-    } else {
-        statusIcon.style.backgroundColor = 'red';
-        mcpServerStatus.textContent = 'Disconnected';
+        const resp = await fetch('/pingMcpServer');
+        const data = await resp.json();
+
+        if (data.status === true || data.status === 'OK') {
+            updateMcpServerStatus(STATUS.CONNECTED);
+            if (isInitial) {
+                appendMessage('internal', 'Successfully connected to MCP server!');
+                startRegularChecks();
+            }
+        } else {
+            updateMcpServerStatus(STATUS.CONNECTING);
+            if (isInitial) {
+                setTimeout(() => attemptConnection(true), retryDelay);
+            }
+        }
+    } catch (err) {
+        console.error('Connection attempt failed:', err);
+        updateMcpServerStatus(STATUS.FAILED);
+        if (isInitial) {
+            setTimeout(() => attemptConnection(true), retryDelay);
+        }
     }
 }
 
-// Reconnect button logic
+function updateMcpServerStatus(status) {
+    const isOk = status === true || status === 'OK' || status === STATUS.CONNECTED;
+    if (isOk) {
+        statusIcon.style.backgroundColor = '#22c55e'; // green-500
+        mcpServerStatus.innerHTML = STATUS.CONNECTED;
+    } else if (status === STATUS.CONNECTING) {
+        statusIcon.style.backgroundColor = '#f97316'; // orange-500
+        mcpServerStatus.innerHTML = `
+            <div style="display: flex; align-items: center; white-space: nowrap;">
+                ${STATUS.CONNECTING}
+                <div class="typing-indicator" style="margin-left: 0.25rem;">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            </div>
+        `;
+    } else {
+        statusIcon.style.backgroundColor = '#ef4444'; // red-500
+        mcpServerStatus.innerHTML = status;
+    }
+}
+
+function startRegularChecks() {
+    setInterval(() => attemptConnection(false), 5000);
+}
+
+// Manual reconnect button
 reconnectBtn.addEventListener('click', async () => {
-    mcpServerStatus.textContent = 'Reconnecting...';
-    /* eslint-disable-next-line no-promise-executor-return */
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    reconnect();
+    connectionAttempts = 0;
+    await attemptConnection(true);
 });
 
-// Periodically check the connection status
-setInterval(async () => {
-    await checkConnection();
-}, 5000);
+// Add this new function near other utility functions
+async function checkActorTimeout() {
+    try {
+        const response = await fetch('/check-actor-timeout');
+        const data = await response.json();
+
+        if (data.timeoutImminent) {
+            const secondsLeft = Math.ceil(data.timeUntilTimeout / 1000);
+            if (secondsLeft <= 0) {
+                appendMessage('internal', '⚠️ Actor has timed out and stopped running. Please restart the Actor to continue.');
+                // Clear the interval when timeout is detected
+                if (timeoutCheckInterval) {
+                    clearInterval(timeoutCheckInterval);
+                    timeoutCheckInterval = null;
+                }
+            } else {
+                appendMessage('internal', `⚠️ Actor will timeout in ${secondsLeft} seconds.\n`);
+            }
+        }
+    } catch (err) {
+        console.error('Error checking timeout status:', err);
+    }
+}
+
+// Store the interval ID when creating it
+timeoutCheckInterval = setInterval(async () => {
+    await checkActorTimeout();
+}, timeoutCheckDelay);
 
 // ================== SEND BUTTON, ENTER KEY HANDLER ==================
 sendBtn.addEventListener('click', () => {

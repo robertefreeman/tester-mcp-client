@@ -16,13 +16,37 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 
-import { BASIC_INFORMATION } from './const.js';
-import { processInput } from './input.js';
+import { BASIC_INFORMATION, Event } from './const.js';
+import { processInput, getChargeForQueryAnswered } from './input.js';
 import { log } from './logger.js';
 import { MCPClient } from './mcpClient.js';
 import type { Input } from './types.js';
 
 await Actor.init();
+
+// Add after Actor.init()
+const RUNNING_TIME_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
+setInterval(async () => {
+    try {
+        const memoryMB = Actor.getEnv().memoryMbytes || 128;
+        const memoryMBCount = Math.ceil(memoryMB / 128);
+        log.info(`Charging for running time (every 5 minutes): ${memoryMB} MB`);
+        await Actor.charge({ eventName: Event.ACTOR_RUNNING_TIME, count: memoryMBCount });
+    } catch (error) {
+        log.error('Failed to charge for running time', { error });
+    }
+}, RUNNING_TIME_INTERVAL);
+
+try {
+    // Charge for memory usage on start
+    const memoryMB = Actor.getEnv().memoryMbytes || 128;
+    const memoryMBCount = Math.ceil(memoryMB / 128);
+    log.info(`Required memory: ${memoryMB} MB. Charging Actor start event.`);
+    await Actor.charge({ eventName: Event.ACTOR_STARTED, count: memoryMBCount });
+} catch (error) {
+    log.error('Failed to charge for actor start event', { error });
+    await Actor.exit('Failed to charge for actor start event');
+}
 
 const STANDBY_MODE = Actor.getEnv().metaOrigin === 'STANDBY';
 const ACTOR_IS_AT_HOME = Actor.isAtHome();
@@ -40,6 +64,14 @@ if (ACTOR_IS_AT_HOME) {
     PORT = '3000';
 }
 
+// Add near the top after Actor.init()
+let ACTOR_TIMEOUT_AT: number | undefined;
+try {
+    ACTOR_TIMEOUT_AT = process.env.ACTOR_TIMEOUT_AT ? new Date(process.env.ACTOR_TIMEOUT_AT).getTime() : undefined;
+} catch {
+    ACTOR_TIMEOUT_AT = undefined;
+}
+
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -55,10 +87,17 @@ log.debug(`systemPrompt: ${input.systemPrompt}`);
 log.debug(`mcpSseUrl: ${input.mcpSseUrl}`);
 log.debug(`modelName: ${input.modelName}`);
 
+if (!input.llmProviderApiKey) {
+    log.error('No API key provided for LLM provider. Report this issue to Actor developer.');
+    await Actor.exit('No API key provided for LLM provider. Report this issue to Actor developer.');
+}
+
 // 4) We'll store the SSE clients (browsers) in an array
 type SSEClient = { id: number; res: express.Response };
 let sseClients: SSEClient[] = [];
 let clientIdCounter = 0;
+let totalTokenUsageInput = 0;
+let totalTokenUsageOutput = 0;
 
 // Create a single instance of your MCP client
 const client = new MCPClient(
@@ -68,7 +107,7 @@ const client = new MCPClient(
     input.modelName,
     input.llmProviderApiKey,
     input.modelMaxOutputTokens,
-    input.maxNumberOfToolCalls,
+    input.maxNumberOfToolCallsPerQuery,
     input.toolCallTimeoutSec,
 );
 
@@ -100,10 +139,22 @@ app.post('/message', async (req, res) => {
         return res.status(400).json({ error: 'Missing "query" field' });
     }
     try {
-        // We call MyMcpClient, passing a callback that broadcasts SSE events
-        await client.processUserQuery(query, (role, content) => {
+        // Process the query
+        const response = await client.processUserQuery(query, (role, content) => {
             broadcastSSE({ role, content });
         });
+        // accumulate token usage for the whole run
+        totalTokenUsageInput += response.usage?.input_tokens ?? 0;
+        totalTokenUsageOutput += response.usage?.output_tokens ?? 0;
+        log.debug(`[internal] Total token usage: ${totalTokenUsageInput} input, ${totalTokenUsageOutput} output`);
+
+        // Charge for task completion
+        if (getChargeForQueryAnswered()) {
+            log.info(`Charging query answered event with ${input.modelName} model`);
+            const eventName = input.modelName === 'claude-3-5-haiku-latest' ? Event.QUERY_ANSWERED_HAIKU_3_5 : Event.QUERY_ANSWERED_SONNET_3_7;
+            await Actor.charge({ eventName });
+        }
+
         return res.json({ ok: true });
     } catch (err) {
         log.error(`Error in processing user query: ${err}`);
@@ -146,6 +197,25 @@ app.get('/client-info', (_req, res) => {
         modelName: input.modelName,
         publicUrl,
         information: BASIC_INFORMATION,
+    });
+});
+
+/**
+ * GET /check-timeout endpoint to check if the actor is about to timeout
+ */
+app.get('/check-actor-timeout', (_req, res) => {
+    if (!ACTOR_TIMEOUT_AT) {
+        return res.json({ timeoutImminent: false });
+    }
+
+    const now = Date.now();
+    const timeUntilTimeout = ACTOR_TIMEOUT_AT - now;
+    const timeoutImminent = timeUntilTimeout < 60000; // Less than 1 minute remaining
+
+    return res.json({
+        timeoutImminent,
+        timeUntilTimeout,
+        timeoutAt: ACTOR_TIMEOUT_AT,
     });
 });
 
