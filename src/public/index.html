@@ -32,17 +32,22 @@
             color: var(--text-primary);
             line-height: 1.5;
             min-height: 100vh;
-            padding-bottom: 80px;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
         }
 
         #chatContainer {
             max-width: 1000px;
             margin: 1rem auto;
             padding: 0 1rem;
-            min-height: 100vh;
+            flex: 1;
             display: flex;
             flex-direction: column;
-            height: auto;
+            position: relative;
+            padding-bottom: 80px; /* Add padding for the input row */
+            width: 100%;
         }
 
         .header {
@@ -84,8 +89,9 @@
             padding: 1rem;
             margin-bottom: 0.75rem;
             box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-            overflow-y: visible;
-            height: auto;
+            overflow-y: auto;
+            height: calc(100vh - 250px);
+            width: 100%;
         }
 
         .message-row {
@@ -173,10 +179,12 @@
             left: 0;
             right: 0;
             background: var(--bg-color);
-            padding: 0.5rem;
+            padding: 0.5rem 1rem;
             z-index: 100;
             max-width: 1000px;
-            margin: 0.75rem auto 0.5rem;
+            margin: 0 auto;
+            box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.1);
+            width: 100%;
         }
 
         #queryInput {
@@ -386,7 +394,7 @@
         <button id="clearBtn">Clear Chat</button>
     </div>
 
-    <div id="chatLog"></div>
+    <div id="chatLog"> </div>
 
     <div id="inputRow">
         <textarea

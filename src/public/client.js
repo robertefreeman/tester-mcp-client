@@ -13,6 +13,15 @@ const reconnectBtn = document.getElementById('reconnectBtn');
 const sendBtn = document.getElementById('sendBtn');
 const statusIcon = document.getElementById('statusIcon');
 
+// Simple scroll to bottom function
+function scrollToBottom() {
+    // Scroll the chat log
+    chatLog.scrollTop = chatLog.scrollHeight;
+
+    // Also scroll the window to ensure we're at the bottom
+    window.scrollTo(0, document.body.scrollHeight);
+}
+
 const messages = []; // Local message array for display only
 const actorTimeoutCheckDelay = 60000; // 60 seconds between checks
 let timeoutCheckInterval = null; // Will store the interval ID
@@ -161,7 +170,7 @@ function appendSingleBubble(role, content) {
 
     row.appendChild(bubble);
     chatLog.appendChild(row);
-    chatLog.scrollTop = chatLog.scrollHeight;
+    scrollToBottom();
 }
 
 /**
@@ -194,7 +203,7 @@ function appendToolBlock(item) {
 
     row.appendChild(container);
     chatLog.appendChild(row);
-    chatLog.scrollTop = chatLog.scrollHeight;
+    scrollToBottom();
 }
 
 // ================== UTILITY FOR FORMATTING CONTENT (JSON, MD, ETC.) ==================
@@ -245,6 +254,9 @@ function escapeHTML(str) {
 
 // ================== SENDING A USER QUERY (POST /message) ==================
 async function sendQuery(query) {
+    // First append the user message
+    appendMessage('user', query);
+
     // Create and show typing indicator
     const loadingRow = document.createElement('div');
     loadingRow.className = 'message-row';
@@ -258,12 +270,10 @@ async function sendQuery(query) {
         </div>
     `;
 
-    // First append the user message
-    appendMessage('user', query);
-
     // Then insert loading indicator as the last child of chatLog
     chatLog.appendChild(loadingRow);
-    chatLog.scrollTop = chatLog.scrollHeight;
+    // Force scroll after adding both message and loading indicator
+    scrollToBottom();
 
     try {
         const resp = await fetch('/message', {
