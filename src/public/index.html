@@ -384,6 +384,19 @@
             <div>MCP Server SSE URL: <span id="mcpSseUrl"></span></div>
         </div>
     </details>
+    
+    <details>
+        <summary>🧰 Available Tools <span id="toolsCount"></span></summary>
+        <div style="padding: 1rem 0;">
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 0.5rem;">
+                <button id="refreshToolsBtn" style="padding: 0.5rem; font-size: 0.85rem;">
+                    🔄 Refresh Tools
+                </button>
+            </div>
+            <p id="toolsLoading">Tools will be loaded once connected</p>
+            <div id="availableTools"></div>
+        </div>
+    </details>
 
     <div class="status-bar">
         <div style="display: flex; align-items: center;">
@@ -406,15 +419,5 @@
     </div>
 </div>
 <script src="client.js"></script>
-<script>
-    // Updated auto-resize textarea
-    document.getElementById('queryInput').addEventListener('input', function() {
-        // Reset height to auto first to get the correct scrollHeight
-        this.style.height = 'auto';
-        // Set new height based on content
-        const newHeight = Math.min(this.scrollHeight, 150); // Cap at max-height
-        this.style.height = newHeight + 'px';
-    });
-</script>
 </body>
 </html>
