@@ -6,13 +6,10 @@ const chatLog = document.getElementById('chatLog');
 const clearBtn = document.getElementById('clearBtn');
 const clientInfo = document.getElementById('clientInfo');
 const information = document.getElementById('information');
-const mcpServerStatus = document.getElementById('mcpServerStatus');
-const mcpSseUrl = document.getElementById('mcpSseUrl');
+const mcpUrl = document.getElementById('mcpUrl');
 const queryInput = document.getElementById('queryInput');
-const reconnectBtn = document.getElementById('reconnectBtn');
 const sendBtn = document.getElementById('sendBtn');
-const statusIcon = document.getElementById('statusIcon');
-const refreshToolsBtn = document.getElementById('refreshToolsBtn');
+const pingMcpServerBtn = document.getElementById('pingMcpServerBtn');
 const toolsContainer = document.getElementById('availableTools');
 const toolsLoading = document.getElementById('toolsLoading');
 
@@ -26,28 +23,15 @@ function scrollToBottom() {
 }
 
 const messages = []; // Local message array for display only
-const actorTimeoutCheckDelay = 60000; // 60 seconds between checks
+const actorTimeoutCheckDelay = 60_000; // 60 seconds between checks
 let timeoutCheckInterval = null; // Will store the interval ID
-
-let connectionAttempts = 0;
-const maxAttempts = 12; // Try for up to 2 minutes (12 * 10 seconds)
-const retryDelay = 10000; // 10 seconds between attempts
-const regularCheckDelay = 30000; // 30 seconds between checks
-const sseReconnectDelay = 2000; // 2 seconds before reconnecting
-
-// Add status message constants
-const STATUS = {
-    CONNECTED: 'Connected',
-    CONNECTING: 'Connecting',
-    FAILED: 'Connection failed',
-    FAILED_TIMEOUT: 'Failed to connect after multiple attempts',
-};
+const sseReconnectDelay = 10_000; // 10 seconds before reconnecting
 
 // ================== SSE CONNECTION SETUP ==================
 let eventSource = new EventSource('/sse');
 
-// Handle incoming SSE messages
-eventSource.onmessage = (event) => {
+// Function to handle incoming SSE messages
+function handleSSEMessage(event) {
     let data;
     try {
         data = JSON.parse(event.data);
@@ -55,60 +39,57 @@ eventSource.onmessage = (event) => {
         console.warn('Could not parse SSE event as JSON:', event.data);
         return;
     }
-    // data = { role, content }
     appendMessage(data.role, data.content);
-};
+}
 
-// Handle SSE errors
-eventSource.onerror = (err) => {
+// Function to handle SSE errors
+function handleSSEError(err) {
     console.error('SSE error:', err);
-    const errorMessage = err instanceof Error ? err.message : 'Connection lost. Attempting to reconnect...';
+    const errorMessage = err instanceof Error ? err.message : 'Connection lost from Browser to MCP-tester-client server. Attempting to reconnect...';
+    console.log(errorMessage);
     appendMessage('internal', errorMessage);
 
     // Close the current connection
     eventSource.close();
 
     // Attempt to reconnect after a delay
-    setTimeout(reconnectSSE, sseReconnectDelay); // Wait 2 seconds before reconnecting
-};
+    setTimeout(reconnectSSE, sseReconnectDelay);
+}
 
-// Reconnection logic extracted into a separate function
+eventSource.onmessage = handleSSEMessage;
+eventSource.onerror = handleSSEError;
+
 function reconnectSSE() {
-    console.log('Attempting to reconnect SSE...');
     const newEventSource = new EventSource('/sse');
 
     newEventSource.onopen = () => {
-        console.log('SSE reconnected successfully');
         appendMessage('internal', 'Connection restored!');
         eventSource = newEventSource; // Update the global eventSource reference
 
-        // Reattach message handler
-        newEventSource.onmessage = eventSource.onmessage;
-        newEventSource.onerror = eventSource.onerror;
+        // Reattach message and error handlers
+        eventSource.onmessage = handleSSEMessage;
+        eventSource.onerror = handleSSEError;
     };
 
-    newEventSource.onerror = eventSource.onerror; // Reuse the same error handler
+    newEventSource.onerror = handleSSEError; // Reuse the same error handler
 }
 
 // ================== ON PAGE LOAD (DOMContentLoaded) ==================
 //  - Fetch client info
 //  - Set up everything else
 
-// Initial connection on page load
+// Initial connection on a page load
 document.addEventListener('DOMContentLoaded', async () => {
     // Fetch client info first
     try {
         const resp = await fetch('/client-info');
         const data = await resp.json();
-        if (mcpSseUrl) mcpSseUrl.textContent = data.mcpSseUrl;
+        if (mcpUrl) mcpUrl.textContent = data.mcpUrl;
         if (clientInfo) clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
         if (information) information.innerHTML = `${data.information}`;
     } catch (err) {
         console.error('Error fetching client info:', err);
     }
-
-    // Start connection attempt loop
-    await attemptConnection(true);
 
     // Add this near the DOMContentLoaded event listener
     window.addEventListener('beforeunload', async () => {
@@ -127,41 +108,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Auto-resize textarea
-    document.getElementById('queryInput').addEventListener('input', function () {
-        // Reset height to auto first to get the correct scrollHeight
-        this.style.height = 'auto';
-        // Set new height based on content
-        const newHeight = Math.min(this.scrollHeight, 150); // Cap at max-height
-        this.style.height = `${newHeight}px`;
-    });
-
-    // Initial connection status check will trigger the tools fetch
-    const checkToolsInterval = setInterval(() => {
-        const status = mcpServerStatus.textContent;
-        if (status === 'Connected') {
-            fetchAvailableTools();
-            clearInterval(checkToolsInterval);
-        }
-    }, 1000);
-
-    // Add tools refresh when reconnecting
-    reconnectBtn.addEventListener('click', () => {
-        showToolsLoading();
-        toolsContainer.innerHTML = '';
-        document.getElementById('toolsCount').textContent = '';
-    });
-
-    // Manual refresh button
-    refreshToolsBtn.addEventListener('click', () => {
-        showToolsLoading();
-        toolsContainer.innerHTML = '';
-        document.getElementById('toolsCount').textContent = '';
-        fetchAvailableTools();
-    });
+    setupModals();
+    // Call ping on a page load
+    await pingMcpServer();
+    // Initial fetch of tools
+    await fetchAvailableTools();
 });
 
-// ================== 4) MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
+// ================== MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
 
 /**
  * appendMessage(role, content):
@@ -220,26 +174,74 @@ function appendToolBlock(item) {
     container.className = 'tool-block';
 
     if (item.type === 'tool_use') {
+        const inputContent = item.input ? formatAnyContent(item.input) : '<em>No input provided</em>';
         container.innerHTML = `
-<details>
-  <summary>Tool use: <strong>${item.name}</strong></summary>
-  <div style="font-size: 0.875rem; margin: 0.5rem 0;">
-    <strong>ID:</strong> ${item.id || 'unknown'}
+<details class="tool-details">
+  <summary>
+    <div class="tool-header">
+      <div class="tool-icon">
+        <i class="fas fa-tools"></i>
+      </div>
+      <div class="tool-info">
+          <div class="tool-call">Tool call: ${item.name || 'N/A'}</div>
+      </div>
+      <div class="tool-status">
+        <i class="fas fa-chevron-down"></i>
+      </div>
+    </div>
+  </summary>
+  <div class="tool-content">
+    <div class="tool-input">
+      <div class="tool-label">Input:</div>
+      ${inputContent}
+    </div>
   </div>
-  ${formatAnyContent(item.input)}
 </details>`;
     } else if (item.type === 'tool_result') {
-        const summary = item.is_error ? 'Tool result (Error)' : 'Tool result';
+        const resultContent = item.content ? formatAnyContent(item.content) : '<em>No result available</em>';
+        let contentLength = 0;
+        if (item.content) {
+            contentLength = typeof item.content === 'string'
+                ? item.content.length
+                : JSON.stringify(item.content).length;
+        }
         container.innerHTML = `
-<details>
-  <summary>${summary}</summary>
-  ${formatAnyContent(item.content)}
+<details class="tool-details">
+  <summary>
+    <div class="tool-header">
+      <div class="tool-icon">
+        <i class="fas fa-file-alt"></i>
+      </div>
+      <div class="tool-info">
+        <div class="tool-name">Tool result</div>
+        <div class="tool-meta">Length: ${contentLength} chars</div>
+      </div>
+      <div class="tool-status">
+        <i class="fas fa-chevron-down"></i>
+      </div>
+    </div>
+  </summary>
+  <div class="tool-content">
+    <div class="tool-result">
+      <div class="tool-label">${item.is_error ? 'Error Details:' : 'Result:'}</div>
+      ${resultContent}
+    </div>
+  </div>
 </details>`;
     }
 
     row.appendChild(container);
     chatLog.appendChild(row);
     scrollToBottom();
+
+    // Add click handler for the chevron icon
+    const chevron = container.querySelector('.fa-chevron-down');
+    if (chevron) {
+        const details = container.querySelector('details');
+        details.addEventListener('toggle', () => {
+            chevron.style.transform = details.open ? 'rotate(180deg)' : 'rotate(0deg)';
+        });
+    }
 }
 
 // ================== UTILITY FOR FORMATTING CONTENT (JSON, MD, ETC.) ==================
@@ -297,7 +299,7 @@ async function sendQuery(query) {
     const loadingRow = document.createElement('div');
     loadingRow.className = 'message-row';
     loadingRow.innerHTML = `
-        <div class="bubble loading">
+        <div class="bubble assistant loading">
             <div class="typing-indicator">
                 <div class="typing-dot"></div>
                 <div class="typing-dot"></div>
@@ -306,9 +308,7 @@ async function sendQuery(query) {
         </div>
     `;
 
-    // Then insert loading indicator as the last child of chatLog
     chatLog.appendChild(loadingRow);
-    // Force scroll after adding both message and loading indicator
     scrollToBottom();
 
     try {
@@ -334,102 +334,31 @@ async function sendQuery(query) {
 // ================== CLEAR CONVERSATION LOG (POST /conversation/reset) ==================
 clearBtn.addEventListener('click', async () => {
     try {
+        // Add visual feedback
+        clearBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        clearBtn.disabled = true;
+
         messages.length = 0;
         chatLog.innerHTML = '';
 
         const resp = await fetch('/conversation/reset', { method: 'POST' });
         const data = await resp.json();
+
         if (data.error) {
             console.error('Server error when resetting conversation:', data.error);
+            appendMessage('internal', 'Failed to clear conversation. Please try again.');
         } else {
             console.log('Server conversation reset');
+            appendMessage('internal', 'Conversation cleared successfully.');
         }
     } catch (err) {
         console.error('Error resetting conversation:', err);
+        appendMessage('internal', 'Error clearing conversation. Please try again.');
+    } finally {
+        // Reset button state
+        clearBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        clearBtn.disabled = false;
     }
-});
-
-// ================== SERVER CONNECTIVITY CHECKS & RECONNECT LOGIC ==================
-
-async function attemptConnection(isInitial = false) {
-    if (isInitial) {
-        if (connectionAttempts >= maxAttempts) {
-            updateMcpServerStatus(STATUS.FAILED);
-            appendMessage('internal', `${STATUS.FAILED_TIMEOUT}. Please try reconnecting manually.`);
-            return;
-        }
-        connectionAttempts++;
-        updateMcpServerStatus(STATUS.CONNECTING);
-        // Add attempt counter inline with smaller font
-        const attemptText = document.createElement('small');
-        attemptText.style.cssText = `
-            margin-left: 0.25rem;
-            opacity: 0.7;
-            font-size: 0.8em;
-            white-space: nowrap;
-            display: inline-block;
-        `;
-        attemptText.textContent = `(${connectionAttempts}/${maxAttempts})`;
-        mcpServerStatus.firstElementChild.appendChild(attemptText);
-    }
-
-    try {
-        const resp = await fetch('/pingMcpServer');
-        const data = await resp.json();
-
-        if (data.status === true || data.status === 'OK') {
-            updateMcpServerStatus(STATUS.CONNECTED);
-            if (isInitial) {
-                appendMessage('internal', 'Successfully connected to MCP server!');
-                startRegularChecks();
-            }
-        } else {
-            updateMcpServerStatus(STATUS.CONNECTING);
-            await fetch('/reconnect', { method: 'POST' });
-            if (isInitial) {
-                setTimeout(() => attemptConnection(true), retryDelay);
-            }
-        }
-    } catch (err) {
-        console.error('Connection attempt failed:', err);
-        updateMcpServerStatus(STATUS.FAILED);
-        if (isInitial) {
-            setTimeout(() => attemptConnection(true), retryDelay);
-        }
-    }
-}
-
-function updateMcpServerStatus(status) {
-    const isOk = status === true || status === 'OK' || status === STATUS.CONNECTED;
-    if (isOk) {
-        statusIcon.style.backgroundColor = '#22c55e'; // green-500
-        mcpServerStatus.innerHTML = STATUS.CONNECTED;
-    } else if (status === STATUS.CONNECTING) {
-        statusIcon.style.backgroundColor = '#f97316'; // orange-500
-        mcpServerStatus.innerHTML = `
-            <div style="display: flex; align-items: center; white-space: nowrap;">
-                ${STATUS.CONNECTING}
-                <div class="typing-indicator" style="margin-left: 0.25rem;">
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                </div>
-            </div>
-        `;
-    } else {
-        statusIcon.style.backgroundColor = '#ef4444'; // red-500
-        mcpServerStatus.innerHTML = status;
-    }
-}
-
-function startRegularChecks() {
-    setInterval(() => attemptConnection(false), regularCheckDelay);
-}
-
-// Manual reconnect button
-reconnectBtn.addEventListener('click', async () => {
-    connectionAttempts = 0;
-    await attemptConnection(true);
 });
 
 // Add this new function near other utility functions
@@ -476,29 +405,39 @@ queryInput.addEventListener('keydown', (e) => {
     }
 });
 
-// ================== AVAILABLE TOOLS ==================
-
-// Update the toolsLoading element to show the animated typing indicator
-function showToolsLoading() {
-    toolsLoading.innerHTML = `
-        <div style="display: flex; align-items: center;">
-            Loading available tools
-            <div class="typing-indicator" style="margin-left: 0.25rem;">
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-            </div>
-        </div>
-    `;
-    toolsLoading.style.display = 'block';
+// Add ping function
+async function pingMcpServer() {
+    try {
+        const resp = await fetch('/ping-mcp-server');
+        const data = await resp.json();
+        if (data.status === true || data.status === 'OK') {
+            appendMessage('internal', 'Successfully connected to MCP server');
+        } else {
+            appendMessage('internal', `${data.error}`);
+        }
+    } catch (err) {
+        appendMessage('internal', `Error pinging MCP server: ${err.message}`);
+    }
 }
 
-// Fetch and display available tools
+// Add click handler for reconnect button
+pingMcpServerBtn.addEventListener('click', async () => {
+    try {
+        // Add visual feedback
+        pingMcpServerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        pingMcpServerBtn.disabled = true;
 
+        await pingMcpServer();
+    } finally {
+        // Reset button state
+        pingMcpServerBtn.innerHTML = '<i class="fas fa-satellite-dish"></i>';
+        pingMcpServerBtn.disabled = false;
+    }
+});
+
+// ================== AVAILABLE TOOLS ==================
 // Fetch available tools
 async function fetchAvailableTools() {
-    showToolsLoading();
-
     try {
         const response = await fetch('/available-tools');
         const data = await response.json();
@@ -548,4 +487,67 @@ function renderTools(tools) {
     });
 
     toolsContainer.appendChild(toolsList);
+}
+
+// ================== MODAL HANDLING ==================
+function setupModals() {
+    // Get button elements
+    const quickStartBtn = document.getElementById('quickStartBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const toolsBtn = document.getElementById('toolsBtn');
+
+    // Function to show a modal
+    function showModal(modalId) {
+        const modalElement = document.getElementById(modalId);
+        if (modalElement) {
+            modalElement.style.display = 'block';
+            document.body.style.overflow = 'hidden'; // Prevent scrolling
+            // Refresh tools when tools modal is opened
+            if (modalId === 'toolsModal') {
+                fetchAvailableTools();
+            }
+        }
+    }
+
+    // Function to hide a modal
+    function hideModal(modalId) {
+        const modalElement = document.getElementById(modalId);
+        if (modalElement) {
+            modalElement.style.display = 'none';
+            document.body.style.overflow = ''; // Restore scrolling
+        }
+    }
+
+    // Add click handlers for modal buttons
+    quickStartBtn.addEventListener('click', () => showModal('quickStartModal'));
+    settingsBtn.addEventListener('click', () => showModal('settingsModal'));
+    toolsBtn.addEventListener('click', () => showModal('toolsModal'));
+
+    // Add click handlers for close buttons
+    document.querySelectorAll('.close-modal').forEach((button) => {
+        button.addEventListener('click', () => {
+            const modal = button.closest('.modal');
+            if (modal) {
+                hideModal(modal.id);
+            }
+        });
+    });
+
+    // Close modal when clicking outside
+    window.addEventListener('click', (event) => {
+        if (event.target.classList.contains('modal')) {
+            hideModal(event.target.id);
+        }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            document.querySelectorAll('.modal').forEach((modal) => {
+                if (modal.style.display === 'block') {
+                    hideModal(modal.id);
+                }
+            });
+        }
+    });
 }
