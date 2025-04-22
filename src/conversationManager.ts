@@ -11,7 +11,6 @@ import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
-import { MAX_HISTORY_CONVERSATIONS } from './const.js';
 import type { Tool, TokenCharger } from './types.js';
 
 if (typeof globalThis.EventSource === 'undefined') {
@@ -96,7 +95,10 @@ export class ConversationManager {
                 const response = await this.anthropic.messages.create({
                     model: this.modelName,
                     max_tokens: this.modelMaxOutputTokens,
-                    messages: messages.slice(-MAX_HISTORY_CONVERSATIONS),
+                    // TODO if we are not careful with slice, we can remove message and get this error
+                    // 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.0.content.0: unexpected tool_use_id found in tool_result
+                    // messages: messages.slice(-MAX_HISTORY_CONVERSATIONS),
+                    messages,
                     system: this.systemPrompt,
                     tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
                 });
