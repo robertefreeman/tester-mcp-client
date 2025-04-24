@@ -13,6 +13,9 @@ const reconnectMcpServerBtn = document.getElementById('reconnectMcpServerButton'
 const toolsContainer = document.getElementById('availableTools');
 const toolsLoading = document.getElementById('toolsLoading');
 
+// State for tracking message processing
+let isProcessingMessage = false;
+
 // Simple scroll to bottom function
 function scrollToBottom() {
     // Scroll the chat log
@@ -36,6 +39,16 @@ function handleSSEMessage(event) {
         data = JSON.parse(event.data);
     } catch {
         console.warn('Could not parse SSE event as JSON:', event.data);
+        return;
+    }
+    // Handle finished flag
+    if (data.finished) {
+        isProcessingMessage = false;
+        sendBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
+        queryInput.focus();
+        if (data.error) {
+            appendMessage('internal', `Error: ${data.content}`);
+        }
         return;
     }
     appendMessage(data.role, data.content);
@@ -82,6 +95,11 @@ function createSSEConnection(isInitial = true, force = false) {
         }
         reconnectMcpServerBtn.classList.remove('connected');
         reconnectMcpServerBtn.classList.add('disconnected');
+        // Re-enable the send button on connection failure
+        isProcessingMessage = false;
+        sendBtn.disabled = false;
+        sendBtn.style.cursor = 'pointer';
+        queryInput.focus();
         return false;
     }
     // Reset reconnect attempts for initial connections
@@ -104,6 +122,11 @@ function createSSEConnection(isInitial = true, force = false) {
             reconnectAttempts = 0; // Reset reconnect attempts on successful connection
             reconnectMcpServerBtn.classList.remove('disconnected');
             reconnectMcpServerBtn.classList.add('connected');
+            // Re-enable the send button on successful connection
+            isProcessingMessage = false;
+            sendBtn.disabled = false;
+            sendBtn.style.cursor = 'pointer';
+            queryInput.focus();
         };
         return true;
     } catch (err) {
@@ -111,6 +134,7 @@ function createSSEConnection(isInitial = true, force = false) {
         appendMessage('internal', `Failed to establish connection: ${err.message}`);
         reconnectMcpServerBtn.classList.remove('connected');
         reconnectMcpServerBtn.classList.add('disconnected');
+        // Re-enable the send button on connection error
         return false;
     }
 }
@@ -472,24 +496,23 @@ function escapeHTML(str) {
 
 // ================== SENDING A USER QUERY (POST /message) ==================
 async function sendQuery(query) {
+    if (isProcessingMessage) return;
+    // Set processing state
+    isProcessingMessage = true;
+    // Show spinner in send button but keep it enabled
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     // First append the user message
     appendMessage('user', query);
 
-    // Create and show typing indicator
-    const loadingRow = document.createElement('div');
-    loadingRow.className = 'message-row';
-    loadingRow.innerHTML = `
-        <div class="bubble assistant loading">
-            <div class="typing-indicator">
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-            </div>
-        </div>
-    `;
-
-    chatLog.appendChild(loadingRow);
-    scrollToBottom();
+    // Safety timeout to re-enable the button if we don't get a response
+    const safetyTimeout = setTimeout(() => {
+        if (isProcessingMessage) {
+            console.warn('Safety timeout reached - re-enabling send button');
+            isProcessingMessage = false;
+            sendBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
+            queryInput.focus();
+        }
+    }, 60_000); // 60 seconds timeout
 
     try {
         const resp = await fetch('/message', {
@@ -499,15 +522,15 @@ async function sendQuery(query) {
         });
         const data = await resp.json();
         if (data.error) {
+            console.log('Server error:', data.error);
             appendMessage('internal', `Server error: ${data.error}`);
         }
     } catch (err) {
-        appendMessage('internal', `Network error: ${err.message}`);
+        console.log('Network error:', err);
+        appendMessage('internal', 'Network error. Try to reconnect or reload page');
     } finally {
-        // Remove loading indicator
-        if (loadingRow.parentNode === chatLog) {
-            loadingRow.remove();
-        }
+        // Clear the safety timeout
+        clearTimeout(safetyTimeout);
     }
 }
 
@@ -572,7 +595,7 @@ timeoutCheckInterval = setInterval(async () => {
 // ================== SEND BUTTON, ENTER KEY HANDLER ==================
 sendBtn.addEventListener('click', () => {
     const query = queryInput.value.trim();
-    if (query) {
+    if (query && !isProcessingMessage) {
         sendQuery(query);
         queryInput.value = '';
         queryInput.style.height = 'auto';
@@ -580,9 +603,9 @@ sendBtn.addEventListener('click', () => {
 });
 
 queryInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!isProcessingMessage) {
             sendBtn.click();
         }
     }
@@ -702,8 +725,8 @@ function setupModals() {
     const settingsBtn = document.getElementById('settingsBtn');
     const toolsBtn = document.getElementById('toolsBtn');
 
-    // Set up example question clicks
-    const exampleQuestions = document.querySelectorAll('#quickStartModal .modal-body ul li');
+    // Set up example question clicks - only for the first list
+    const exampleQuestions = document.querySelectorAll('#quickStartModal .modal-body h4:first-of-type + ul li');
     exampleQuestions.forEach((question) => {
         question.addEventListener('click', () => {
             const text = question.textContent.trim();
