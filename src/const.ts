@@ -28,3 +28,5 @@ export const Event = {
 };
 
 export const MAX_HISTORY_CONVERSATIONS = 10;
+
+export const CONVERSATION_RECORD_NAME = 'CONVERSATION';
