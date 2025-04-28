@@ -29,7 +29,6 @@ function isUserScrolling(tolerance = 50) {
 
 // Simple scroll to bottom function
 function scrollToBottom() {
-    // Scroll the chat log
     // Scroll to bottom of the page
     window.scrollTo(0, document.body.scrollHeight);
 }
@@ -53,6 +52,7 @@ function handleSSEMessage(event) {
         console.warn('Could not parse SSE event as JSON:', event.data);
         return;
     }
+    console.log('Received SSE message:', data);
     // Handle finished flag
     if (data.finished) {
         isProcessingMessage = false;
@@ -63,7 +63,7 @@ function handleSSEMessage(event) {
         }
         return;
     }
-    appendMessage(data.role, data.content);
+    appendMessage(data.role, data.content, data.key);
 }
 
 // Function to handle SSE errors
@@ -309,38 +309,82 @@ function showNotification(message, type = 'info') {
 // ================== MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
 
 /**
- * appendMessage(role, content):
+* Fix message order by key
+@returns {void}
+*/
+function fixMessageOrder() {
+    // Fix order of messages array
+    messages.sort((a, b) => a.key - b.key);
+
+    // Fix message DOM elements
+    const messageElements = chatLog.getElementsByClassName('message-row');
+    for (let i = 1; i < messageElements.length; i++) {
+        const message = messageElements[i];
+        const previousMessage = messageElements[i - 1];
+
+        // Skip if either message does not have a key
+        if (!message.dataset.key || !previousMessage.dataset.key) {
+            continue;
+        }
+
+        try {
+            const messageKey = parseInt(message.dataset.key, 10);
+            const previousMessageKey = parseInt(previousMessage.dataset.key, 10);
+
+            if (messageKey < previousMessageKey) {
+                console.log('Reordering message', message, 'placing it before', previousMessage);
+                chatLog.insertBefore(message, previousMessage);
+            }
+        } catch (error) {
+            console.error('Error reordering message:', error);
+            continue;
+        }
+    }
+}
+
+/**
+ * appendMessage(role, content, key):
  *   If content is an array (potential tool blocks),
  *   handle each item separately; otherwise just show a normal bubble.
+ @param {string} role - The role of the message (user, assistant, internal)
+ @param {string|array} content - The content of the message (string or array of items)
+ @param {number|undefined} [key] - Optional key of the message (used for ordering)
  */
-function appendMessage(role, content) {
+function appendMessage(role, content, key = undefined) {
     // Always scroll to bottom when user sends the message
     // otherwise only when user is not scrolling chat history
     const shouldScrollToBottom = role === 'user' ? true : !isUserScrolling();
-    messages.push({ role, content });
+    messages.push({ role, content, key });
 
     if (Array.isArray(content)) {
         content.forEach((item) => {
             if (item.type === 'tool_use' || item.type === 'tool_result') {
-                appendToolBlock(item);
+                appendToolBlock(item, key);
             } else {
-                appendSingleBubble(role, item);
+                appendSingleBubble(role, item, key);
             }
         });
     } else {
         // normal single content
-        appendSingleBubble(role, content);
+        appendSingleBubble(role, content, key);
     }
+
+    // Fix message order after appending
+    fixMessageOrder();
 
     if (shouldScrollToBottom) scrollToBottom();
 }
 
 /**
- * appendSingleBubble(role, content): Renders a normal user/assistant/internal bubble
+ * appendSingleBubble(role, content, key): Renders a normal user/assistant/internal bubble
+ @param {string} role - The role of the message (user, assistant, internal)
+ @param {string} content - The content of the message
+ @param {number|undefined} [key] - Optional key of the message (used for ordering)
  */
-function appendSingleBubble(role, content) {
+function appendSingleBubble(role, content, key) {
     const row = document.createElement('div');
     row.className = 'message-row';
+    if (key !== undefined) row.setAttribute('data-key', key);
 
     if (role === 'user') {
         row.classList.add('user-message');
@@ -371,11 +415,14 @@ function isBase64(str) {
 }
 
 /**
- * appendToolBlock(item): Renders a separate row for tool_use/tool_result
+ * appendToolBlock(item, key): Renders a separate row for tool_use/tool_result
+ @param {object} item - The tool use or result item
+ @param {number|undefined} [key] - Optional key of the message (used for ordering)
  */
-function appendToolBlock(item) {
+function appendToolBlock(item, key) {
     const row = document.createElement('div');
     row.className = 'message-row tool-row';
+    if (key !== undefined) row.setAttribute('data-key', key);
 
     const container = document.createElement('div');
     container.className = 'tool-block';
