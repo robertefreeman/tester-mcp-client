@@ -214,24 +214,89 @@ document.addEventListener('DOMContentLoaded', async () => {
     const toolCallTimeoutInput = document.getElementById('toolCallTimeoutInput');
     const systemPromptInput = document.getElementById('systemPromptInput');
     const resetSettingsBtn = document.getElementById('resetSettingsBtn');
+    
+    // Add LLM Provider Base URL input (we need to add this to HTML first)
+    const llmProviderBaseUrlInput = document.getElementById('llmProviderBaseUrlInput');
     // Function to load model options dynamically
     async function loadModelOptions() {
         try {
-            const resp = await fetch('/schema/models');
-            const modelOptions = await resp.json();
+            // First try to load dynamic models from the LLM provider
+            let modelOptions = [];
+            let usedDynamicFetch = false;
+            
+            try {
+                const dynamicResp = await fetch('/available-models');
+                if (dynamicResp.ok) {
+                    modelOptions = await dynamicResp.json();
+                    usedDynamicFetch = true;
+                    console.log('Successfully loaded dynamic models from LLM provider');
+                } else {
+                    throw new Error(`Dynamic models fetch failed: ${dynamicResp.status}`);
+                }
+            } catch (dynamicError) {
+                console.warn('Failed to load dynamic models, falling back to static schema:', dynamicError);
+                // Fallback to static schema models
+                const schemaResp = await fetch('/schema/models');
+                modelOptions = await schemaResp.json();
+            }
+            
             modelNameSelect.innerHTML = '';
+            
+            // Add a loading/status indicator if using dynamic models
+            if (usedDynamicFetch && modelOptions.length > 0) {
+                const statusOption = document.createElement('option');
+                statusOption.disabled = true;
+                statusOption.textContent = `-- ${modelOptions.length} models from provider --`;
+                statusOption.style.fontStyle = 'italic';
+                statusOption.style.color = '#666';
+                modelNameSelect.appendChild(statusOption);
+            }
+            
             modelOptions.forEach((option) => {
                 const optionElement = document.createElement('option');
                 optionElement.value = option.value;
                 optionElement.textContent = option.label;
                 modelNameSelect.appendChild(optionElement);
             });
+            
+            if (usedDynamicFetch) {
+                showNotification(`Loaded ${modelOptions.length} models from LLM provider`, 'success');
+            }
         } catch (err) {
             console.error('Error loading model options:', err);
-            showNotification('Failed to load model options. Using defaults.', 'warning');
+            showNotification('Failed to load model options. Please check your LLM provider configuration.', 'error');
+            
+            // Last resort: Add a basic fallback option
+            modelNameSelect.innerHTML = '';
+            const fallbackOption = document.createElement('option');
+            fallbackOption.value = 'gpt-4-turbo';
+            fallbackOption.textContent = 'GPT-4 Turbo (Fallback)';
+            modelNameSelect.appendChild(fallbackOption);
         }
     }
     await loadModelOptions();
+    
+    // Add refresh models button functionality
+    const refreshModelsBtn = document.getElementById('refreshModelsBtn');
+    if (refreshModelsBtn) {
+        refreshModelsBtn.addEventListener('click', async () => {
+            const originalText = refreshModelsBtn.textContent;
+            refreshModelsBtn.textContent = 'Refreshing...';
+            refreshModelsBtn.disabled = true;
+            
+            try {
+                await loadModelOptions();
+                showNotification('Models refreshed successfully!', 'success');
+            } catch (err) {
+                console.error('Error refreshing models:', err);
+                showNotification('Failed to refresh models. Please check your LLM provider configuration.', 'error');
+            } finally {
+                refreshModelsBtn.textContent = originalText;
+                refreshModelsBtn.disabled = false;
+            }
+        });
+    }
+    
     // Load current settings
     try {
         const resp = await fetch('/settings');
@@ -242,6 +307,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         maxToolCallsInput.value = settings.maxNumberOfToolCallsPerQuery;
         toolCallTimeoutInput.value = settings.toolCallTimeoutSec;
         systemPromptInput.value = settings.systemPrompt;
+        
+        // Load LLM provider base URL if available
+        if (llmProviderBaseUrlInput && settings.llmProviderBaseUrl) {
+            llmProviderBaseUrlInput.value = settings.llmProviderBaseUrl;
+        }
     } catch (err) {
         console.error('Error loading settings:', err);
         showNotification('Failed to load settings. Please check console for details.', 'error');
@@ -257,6 +327,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             toolCallTimeoutSec: parseInt(toolCallTimeoutInput.value, 10),
             systemPrompt: systemPromptInput.value,
         };
+        
+        // Add LLM provider base URL if available
+        if (llmProviderBaseUrlInput) {
+            newSettings.llmProviderBaseUrl = llmProviderBaseUrlInput.value;
+        }
         try {
             const resp = await fetch('/settings', {
                 method: 'POST',
@@ -294,6 +369,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 maxToolCallsInput.value = settings.maxNumberOfToolCallsPerQuery;
                 toolCallTimeoutInput.value = settings.toolCallTimeoutSec;
                 systemPromptInput.value = settings.systemPrompt;
+                
+                // Reset LLM provider base URL if available
+                if (llmProviderBaseUrlInput) {
+                    llmProviderBaseUrlInput.value = settings.llmProviderBaseUrl || '';
+                }
                 showNotification('Settings reset to defaults successfully!', 'success');
             } else {
                 showNotification(`Failed to reset settings: ${result.error}`, 'error');

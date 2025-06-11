@@ -89,9 +89,15 @@
                     <div class="form-group">
                         <label for="modelNameSelect">Model:</label>
                         <select id="modelNameSelect" class="form-control">
-                            <!-- Options will be loaded dynamically from input schema -->
+                            <!-- Options will be loaded dynamically from available models -->
                         </select>
-                        <small class="form-text">Select the language model to use.</small>
+                        <small class="form-text">Select the language model to use. Models are fetched dynamically from your LLM provider.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="llmProviderBaseUrlInput">LLM Provider Base URL:</label>
+                        <input type="text" id="llmProviderBaseUrlInput" class="form-control" placeholder="https://api.openai.com/v1 or http://localhost:11434/v1">
+                        <small class="form-text">Base URL for OpenAI-compatible API endpoints (e.g., Ollama, vLLM). Leave empty for OpenAI's official API. <button type="button" id="refreshModelsBtn" class="btn btn-sm btn-secondary" style="margin-left: 10px; font-size: 0.8em;">Refresh Models</button></small>
                     </div>
 
                     <div class="form-group">

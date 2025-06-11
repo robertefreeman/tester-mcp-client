@@ -1,12 +1,20 @@
 version: '3.8'
 
+# Docker Compose configuration for pre-built Docker Hub image
+# This file uses the pre-built tester-mcp-client image from Docker Hub
+# instead of building from source code.
+#
+# Usage:
+#   1. Copy .env.example to .env and configure your API keys
+#   2. Run: docker-compose -f docker-compose.prebuilt.yaml up -d
+#   3. Navigate to http://localhost:5001 to access the chat interface
+
 services:
   mcp-client:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Use pre-built image from Docker Hub instead of building locally
+    image: rfreeman/mcp-test-client:latest
     
-    container_name: mcp-client-app
+    container_name: mcp-test-client
     
     ports:
       - "5001:5001"
@@ -36,4 +44,4 @@ services:
       start_period: 5s
       retries: 3
     
-    restart: unless-stopped
+    restart: unless-stoppedß

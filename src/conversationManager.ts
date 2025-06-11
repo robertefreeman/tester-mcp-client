@@ -55,9 +55,22 @@ export class ConversationManager {
         this.maxNumberOfToolCallsPerQueryRound = maxNumberOfToolCallsPerQuery;
         this.toolCallTimeoutSec = toolCallTimeoutSec;
         this.tokenCharger = tokenCharger;
-        this.openai = new OpenAI({ 
+        
+        // DEBUG: Log LLM provider configuration
+        const effectiveBaseUrl = baseUrl || 'https://api.openai.com/v1';
+        log.info(`[DEBUG] LLM Provider Configuration:`, {
+            baseUrl: effectiveBaseUrl,
+            providedBaseUrl: baseUrl,
+            modelName: modelName,
+            hasApiKey: !!apiKey
+        });
+        
+        this.openai = new OpenAI({
             apiKey,
-            baseURL: baseUrl
+            baseURL: baseUrl,
+            defaultHeaders: {
+                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
         });
         this.conversation = [...persistedConversation];
         this.maxContextTokens = Math.floor(maxContextTokens * CONTEXT_TOKEN_SAFETY_MARGIN);
@@ -555,6 +568,41 @@ export class ConversationManager {
             this.conversation.push({ role: 'assistant', content: errorMsg });
             sseEmit('assistant', errorMsg);
             throw new Error(errorMsg);
+        }
+    }
+
+    /**
+     * Process a user query without MCP tools - just use the LLM directly
+     */
+    async processQueryWithoutTools(query: string): Promise<string> {
+        log.debug(`[internal] Processing query without MCP tools: ${JSON.stringify(query)}`);
+        this.conversation.push({ role: 'user', content: query });
+
+        // Temporarily clear tools to ensure no tool calls are made
+        const originalTools = this.tools;
+        this.tools = [];
+
+        try {
+            const response = await this.createMessageWithRetry();
+            log.debug(`[internal] Received response: ${JSON.stringify(response.choices[0]?.message)}`);
+            log.debug(`[internal] Token count: ${JSON.stringify(response.usage)}`);
+            
+            const message = response.choices[0]?.message;
+            if (!message) {
+                throw new Error('No message in response');
+            }
+
+            const content = message.content || 'I apologize, but I was unable to generate a response.';
+            this.conversation.push({ role: 'assistant', content });
+            
+            return content;
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this.conversation.push({ role: 'assistant', content: errorMsg });
+            throw new Error(errorMsg);
+        } finally {
+            // Restore tools
+            this.tools = originalTools;
         }
     }
 

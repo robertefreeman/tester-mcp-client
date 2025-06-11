@@ -20,7 +20,7 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine AS runtime
 
-# Create non-root user for security
+# Create non-root user for security≈
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S mcp-client -u 1001
 
@@ -49,7 +49,7 @@ USER mcp-client
 EXPOSE 5001
 
 # Add labels for metadata
-LABEL maintainer="Apify <support@apify.com>"
+LABEL maintainer="@robrary <robertxfreeman@gmail.com>"
 LABEL description="Model Context Protocol Client with OpenAI Integration"
 LABEL version="0.1.0"
 LABEL llm-provider="openai"

@@ -49,6 +49,68 @@ The Apify MCP Client connects to a running MCP server over Server-Sent Events (S
 - Test any MCP server over SSE
 - Test [Apify MCP Server](https://mcp.apify.com/) and the ability to dynamically select amongst thousands of tools
 
+## 🚀 Quickstart
+
+Get started quickly with the pre-built Docker image from Docker Hub:
+
+### Using Docker Run
+
+```bash
+# Create environment file from example
+cp .env.example .env
+# Edit .env file with your API keys
+
+# Run the pre-built Docker image
+docker run -d \
+  --name mcp-client \
+  -p 5001:5001 \
+  --env-file .env \
+  -e ACTOR_WEB_SERVER_PORT=5001 \
+  -e NODE_ENV=production \
+  rfreeman/mcp-test-client:latest
+```
+
+Navigate to [http://localhost:5001](http://localhost:5001) to access the chat interface.
+
+### Using Docker Compose (Pre-built Image)
+
+For an even simpler setup, use the provided docker-compose file for pre-built images:
+
+```bash
+# Create environment file from example
+cp .env.example .env
+# Edit .env file with your API keys
+
+# Start with docker-compose using pre-built image
+docker-compose -f docker-compose.prebuilt.yaml up -d
+
+# View logs
+docker-compose -f docker-compose.prebuilt.yaml logs -f
+
+# Stop the service
+docker-compose -f docker-compose.prebuilt.yaml down
+```
+
+### Environment Variables Setup
+
+Copy the `.env.example` file to `.env` and configure the following required variables:
+
+```bash
+# Required: Apify API token for MCP server authentication
+APIFY_TOKEN=your_apify_token_here
+
+# Required: OpenAI API key for LLM provider access
+LLM_PROVIDER_API_KEY=your_openai_api_key_here
+
+# Optional: Custom OpenAI-compatible endpoint
+LLM_PROVIDER_BASE_URL=https://api.openai.com/v1
+
+# Optional: Model name for custom endpoints (Ollama, vLLM, etc.)
+MODEL_NAME=gpt-4
+```
+
+After starting the container, navigate to [http://localhost:5001](http://localhost:5001) to interact with the MCP server through the chat interface.
+
 ### Normal Mode (on Apify)
 
 You can run the Tester MCP Client on Apify and connect it to any MCP server that supports SSE.
