@@ -1,7 +1,6 @@
-import type { ContentBlockParam, MessageParam } from '@anthropic-ai/sdk/resources/index.js';
-
 export type Input = {
     llmProviderApiKey: string,
+    llmProviderBaseUrl?: string,
     modelName: string,
     headers: Record<string, string>,
     maxNumberOfToolCallsPerQuery: number,
@@ -41,6 +40,46 @@ export interface TokenCharger {
     chargeTokens(inputTokens: number, outputTokens: number, modelName: string): Promise<void>;
 }
 
+// OpenAI-compatible message types
+export type MessageRole = 'system' | 'user' | 'assistant' | 'tool';
+
+export type TextContent = {
+    type: 'text';
+    text: string;
+};
+
+export type ImageContent = {
+    type: 'image_url';
+    image_url: {
+        url: string;
+        detail?: 'low' | 'high' | 'auto';
+    };
+};
+
+export type ToolCallContent = {
+    id: string;
+    type: 'function';
+    function: {
+        name: string;
+        arguments: string;
+    };
+};
+
+export type ToolResultContent = {
+    tool_call_id: string;
+    content: string;
+};
+
+export type MessageContent = string | (TextContent | ImageContent)[];
+
+export interface MessageParam {
+    role: MessageRole;
+    content: MessageContent;
+    tool_calls?: ToolCallContent[];
+    tool_call_id?: string;
+    name?: string;
+}
+
 export interface MessageParamWithBlocks extends MessageParam {
-    content: ContentBlockParam[];
+    content: (TextContent | ImageContent)[];
 }

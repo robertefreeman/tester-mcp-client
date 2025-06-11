@@ -11,7 +11,6 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import type { MessageParam } from '@anthropic-ai/sdk/resources/index.js';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { Actor } from 'apify';
 import cors from 'cors';
@@ -27,6 +26,9 @@ import { log } from './logger.js';
 import type { TokenCharger, Input } from './types.js';
 import inputSchema from '../.actor/input_schema.json' with { type: 'json' };
 
+// Default max context tokens constant
+const DEFAULT_MAX_CONTEXT_TOKENS = 200_000;
+
 await Actor.init();
 
 /**
@@ -38,21 +40,21 @@ export class ActorTokenCharger implements TokenCharger {
         let eventNameInput: string;
         let eventNameOutput: string;
         switch (modelName) {
-            case 'claude-3-5-haiku-latest':
-                eventNameInput = Event.INPUT_TOKENS_HAIKU_3_5;
-                eventNameOutput = Event.OUTPUT_TOKENS_HAIKU_3_5;
+            case 'gpt-3.5-turbo':
+                eventNameInput = Event.INPUT_TOKENS_GPT35;
+                eventNameOutput = Event.OUTPUT_TOKENS_GPT35;
                 break;
-            case 'claude-3-7-sonnet-latest':
-                eventNameInput = Event.INPUT_TOKENS_SONNET_3_7;
-                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_3_7;
+            case 'gpt-4':
+                eventNameInput = Event.INPUT_TOKENS_GPT4;
+                eventNameOutput = Event.OUTPUT_TOKENS_GPT4;
                 break;
-            case 'claude-sonnet-4-0':
-                eventNameInput = Event.INPUT_TOKENS_SONNET_4;
-                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_4;
+            case 'gpt-4-turbo':
+                eventNameInput = Event.INPUT_TOKENS_GPT4_TURBO;
+                eventNameOutput = Event.OUTPUT_TOKENS_GPT4_TURBO;
                 break;
             default:
-                eventNameInput = Event.INPUT_TOKENS_SONNET_4;
-                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_4;
+                eventNameInput = Event.INPUT_TOKENS_GPT4;
+                eventNameOutput = Event.OUTPUT_TOKENS_GPT4;
                 break;
         }
         try {
@@ -142,7 +144,7 @@ const publicPath = path.join(path.dirname(filename), 'public');
 const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
-const persistedConversation = (await Actor.getValue<MessageParam[]>(CONVERSATION_RECORD_NAME)) ?? [];
+const persistedConversation = (await Actor.getValue<import('./types.js').MessageParam[]>(CONVERSATION_RECORD_NAME)) ?? [];
 const conversationCounter = new Counter(persistedConversation.length);
 
 const conversationManager = new ConversationManager(
@@ -154,6 +156,8 @@ const conversationManager = new ConversationManager(
     input.toolCallTimeoutSec,
     getChargeForTokens() ? new ActorTokenCharger() : null,
     persistedConversation,
+    DEFAULT_MAX_CONTEXT_TOKENS,
+    input.llmProviderBaseUrl,
 );
 
 // This should not be needed, but just in case

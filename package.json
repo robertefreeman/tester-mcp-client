@@ -30,8 +30,7 @@
     "model context protocol"
   ],
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.36.2",
-    "@anthropic-ai/tokenizer": "^0.0.4",
+    "openai": "^4.65.0",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "apify": "^3.3.2",
     "cors": "^2.8.5",

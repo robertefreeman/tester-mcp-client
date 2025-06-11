@@ -20,12 +20,12 @@ export const BASIC_INFORMATION = 'Once you have the Tester MCP Client running, y
 export const Event = {
     ACTOR_STARTED: 'actor-start',
     ACTOR_RUNNING_TIME: 'actor-running-time',
-    INPUT_TOKENS_SONNET_3_7: 'input-tokens-sonnet-3-7',
-    OUTPUT_TOKENS_SONNET_3_7: 'output-tokens-sonnet-3-7',
-    INPUT_TOKENS_HAIKU_3_5: 'input-tokens-haiku-3-5',
-    OUTPUT_TOKENS_HAIKU_3_5: 'output-tokens-haiku-3-5',
-    INPUT_TOKENS_SONNET_4: 'input-tokens-sonnet-4',
-    OUTPUT_TOKENS_SONNET_4: 'output-tokens-sonnet-4',
+    INPUT_TOKENS_GPT4: 'input-tokens-gpt4',
+    OUTPUT_TOKENS_GPT4: 'output-tokens-gpt4',
+    INPUT_TOKENS_GPT35: 'input-tokens-gpt35',
+    OUTPUT_TOKENS_GPT35: 'output-tokens-gpt35',
+    INPUT_TOKENS_GPT4_TURBO: 'input-tokens-gpt4-turbo',
+    OUTPUT_TOKENS_GPT4_TURBO: 'output-tokens-gpt4-turbo',
     QUERY_ANSWERED: 'query-answered',
 };
 

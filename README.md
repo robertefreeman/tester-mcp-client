@@ -113,7 +113,8 @@ Create a `.env` file with the following content (refer to the `.env.example` fil
 
 ```plaintext
 APIFY_TOKEN=YOUR_APIFY_TOKEN
-LLM_PROVIDER_API_KEY=YOUR_API_KEY
+LLM_PROVIDER_API_KEY=YOUR_OPENAI_API_KEY
+LLM_PROVIDER_BASE_URL=https://api.openai.com/v1  # Optional: custom OpenAI-compatible endpoint
 ```
 
 Default values for settings such as `mcpUrl`, `systemPrompt`, and others are defined in the `const.ts` file. You can adjust these as needed for your development.

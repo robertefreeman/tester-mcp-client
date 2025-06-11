@@ -50,8 +50,9 @@ EXPOSE 5001
 
 # Add labels for metadata
 LABEL maintainer="Apify <support@apify.com>"
-LABEL description="Model Context Protocol Client"
+LABEL description="Model Context Protocol Client with OpenAI Integration"
 LABEL version="0.1.0"
+LABEL llm-provider="openai"
 
 # Health check using the /client-info endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

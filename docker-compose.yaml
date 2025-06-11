@@ -16,11 +16,17 @@ services:
     
     # Environment variables - customize these values as needed
     environment:
-      # Required: Apify API token for accessing Apify services
+      # Required: Apify API token for accessing Apify services and MCP server authentication
       - APIFY_TOKEN=${APIFY_TOKEN}
       
-      # Required: API key for LLM provider (e.g., OpenAI, Anthropic)
+      # Required: OpenAI API key for LLM provider access
+      # Get your API key from: https://platform.openai.com/api-keys
       - LLM_PROVIDER_API_KEY=${LLM_PROVIDER_API_KEY}
+      
+      # Optional: Custom OpenAI-compatible endpoint base URL
+      # Leave empty for standard OpenAI API, or set to use compatible services
+      # Examples: https://api.openai.com/v1 (default), https://your-custom-endpoint.com/v1
+      - LLM_PROVIDER_BASE_URL=${LLM_PROVIDER_BASE_URL}
       
       # Optional: Override default port if needed
       - ACTOR_WEB_SERVER_PORT=5001
@@ -30,8 +36,19 @@ services:
     
     # Alternative: Load environment variables from .env file
     # Uncomment the line below and create a .env file with your variables
+    # This is the recommended approach for local development
     # env_file:
     #   - .env
+    
+    # OpenAI Configuration Notes:
+    # - Supports GPT models: gpt-4-turbo, gpt-4, gpt-3.5-turbo
+    # - LLM_PROVIDER_BASE_URL is optional - leave empty for standard OpenAI API
+    # - For custom OpenAI-compatible endpoints (e.g., Azure OpenAI, local models):
+    #   Set LLM_PROVIDER_BASE_URL to your endpoint URL
+    # - Example .env file:
+    #   APIFY_TOKEN=your_apify_token_here
+    #   LLM_PROVIDER_API_KEY=your_openai_api_key_here
+    #   LLM_PROVIDER_BASE_URL=https://your-custom-endpoint.com/v1
     
     # Health check configuration
     healthcheck:
@@ -56,9 +73,10 @@ services:
     
     # Labels for metadata and organization
     labels:
-      - "com.apify.description=Model Context Protocol Client"
+      - "com.apify.description=Model Context Protocol Client with OpenAI Integration"
       - "com.apify.version=0.1.0"
       - "com.apify.service=mcp-client"
+      - "com.apify.llm-provider=openai"
 
 # Optional: Create a custom network for better container isolation
 # networks:

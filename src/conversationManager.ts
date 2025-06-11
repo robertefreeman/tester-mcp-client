@@ -3,15 +3,14 @@
  *
  */
 
-import { Anthropic } from '@anthropic-ai/sdk';
-import type { ContentBlockParam, Message, MessageParam, TextBlockParam, ImageBlockParam } from '@anthropic-ai/sdk/resources/messages';
+import OpenAI from 'openai';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { ListToolsResult, Notification, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
-import type { MessageParamWithBlocks, TokenCharger, Tool } from './types.js';
+import type { MessageParamWithBlocks, TokenCharger, Tool, MessageParam, TextContent, ImageContent, ToolCallContent } from './types.js';
 import { pruneAndFixConversation } from './utils.js';
 
 if (typeof globalThis.EventSource === 'undefined') {
@@ -28,7 +27,7 @@ const MIN_CONVERSATION_LENGTH = 2;
 
 export class ConversationManager {
     private conversation: MessageParam[] = [];
-    private anthropic: Anthropic;
+    private openai: OpenAI;
     private systemPrompt: string;
     private modelName: string;
     private modelMaxOutputTokens: number;
@@ -48,6 +47,7 @@ export class ConversationManager {
         tokenCharger: TokenCharger | null = null,
         persistedConversation: MessageParam[] = [],
         maxContextTokens: number = DEFAULT_MAX_CONTEXT_TOKENS,
+        baseUrl?: string,
     ) {
         this.systemPrompt = systemPrompt;
         this.modelName = modelName;
@@ -55,7 +55,10 @@ export class ConversationManager {
         this.maxNumberOfToolCallsPerQueryRound = maxNumberOfToolCallsPerQuery;
         this.toolCallTimeoutSec = toolCallTimeoutSec;
         this.tokenCharger = tokenCharger;
-        this.anthropic = new Anthropic({ apiKey });
+        this.openai = new OpenAI({ 
+            apiKey,
+            baseURL: baseUrl
+        });
         this.conversation = [...persistedConversation];
         this.maxContextTokens = Math.floor(maxContextTokens * CONTEXT_TOKEN_SAFETY_MARGIN);
     }
@@ -80,18 +83,38 @@ export class ConversationManager {
             }
 
             // Handle messages with content blocks
-            for (const block of message.content) {
-                if (block.type === 'text') {
+            if (Array.isArray(message.content)) {
+                for (const block of message.content) {
+                    if (block.type === 'text') {
+                        result.push({
+                            role: message.role,
+                            content: block.text || '',
+                        });
+                    } else if (block.type === 'image_url') {
+                        result.push({
+                            role: message.role,
+                            content: [block],
+                        });
+                    }
+                }
+            }
+
+            // Handle tool calls
+            if (message.tool_calls) {
+                for (const toolCall of message.tool_calls) {
                     result.push({
                         role: message.role,
-                        content: block.text || '',
-                    });
-                } else if (block.type === 'tool_use' || block.type === 'tool_result') {
-                    result.push({
-                        role: message.role,
-                        content: [block],
+                        content: [toolCall as any],
                     });
                 }
+            }
+
+            // Handle tool results
+            if (message.tool_call_id) {
+                result.push({
+                    role: message.role,
+                    content: message.content,
+                });
             }
         }
 
@@ -136,68 +159,8 @@ export class ConversationManager {
         return true;
     }
 
-    // /**
-    //  * Adds fake tool_result messages for tool_use messages that don't have a corresponding tool_result message.
-    //  * @returns
-    //  */
-    // private fixToolResult() {
-    //     // Storing both in case the messages are in the wrong order
-    //     const toolUseIDs = new Set<string>();
-    //     const toolResultIDs = new Set<string>();
-    //
-    //     for (let m = 0; m < this.conversation.length; m++) {
-    //         const message = this.conversation[m];
-    //
-    //         if (typeof message.content === 'string') continue;
-    //
-    //         // Handle messages with content blocks
-    //         const contentBlocks = message.content as ContentBlockParam[];
-    //         for (let i = 0; i < contentBlocks.length; i++) {
-    //             const block = contentBlocks[i];
-    //             if (block.type === 'tool_use') {
-    //                 toolUseIDs.add(block.id);
-    //             } else if (block.type === 'tool_result') {
-    //                 toolResultIDs.add(block.tool_use_id);
-    //             }
-    //         }
-    //     }
-    //     const toolUseIDsWithoutResult = Array.from(toolUseIDs).filter((id) => !toolResultIDs.has(id));
-    //
-    //     if (toolUseIDsWithoutResult.length < 1) {
-    //         return;
-    //     }
-    //
-    //     const fixedConversation: MessageParam[] = [];
-    //     for (let m = 0; m < this.conversation.length; m++) {
-    //         const message = this.conversation[m];
-    //
-    //         fixedConversation.push(message);
-    //         // Handle messages with content blocks
-    //         if (typeof message.content === 'string') continue;
-    //
-    //         const contentBlocks = message.content as ContentBlockParam[];
-    //         for (let i = 0; i < contentBlocks.length; i++) {
-    //             const block = contentBlocks[i];
-    //             if (block.type === 'tool_use' && toolUseIDsWithoutResult.includes(block.id)) {
-    //                 log.debug(`Adding fake tool_result message for tool_use with ID: ${block.id}`);
-    //                 fixedConversation.push({
-    //                     role: 'user',
-    //                     content: [
-    //                         {
-    //                             type: 'tool_result',
-    //                             tool_use_id: block.id,
-    //                             content: '[Tool use without result - most likely tool failed or response was too large to be sent to LLM]',
-    //                         },
-    //                     ],
-    //                 });
-    //             }
-    //         }
-    //     }
-    //     this.conversation = fixedConversation;
-    // }
-
     /**
-     * Count the number of tokens in the conversation history using Anthropic's API.
+     * Count the number of tokens in the conversation history using OpenAI's token estimation.
      * @returns The number of tokens in the conversation.
      */
     private async countTokens(messages: MessageParam[]): Promise<number> {
@@ -205,17 +168,116 @@ export class ConversationManager {
             return 0;
         }
         try {
-            const response = await this.anthropic.messages.countTokens({
-                model: this.modelName,
-                messages,
-                system: this.systemPrompt,
-                tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
-            });
-            return response.input_tokens ?? 0;
+            // Convert to OpenAI format for token counting
+            const openaiMessages = this.convertToOpenAIMessages(messages);
+            
+            // Simple token estimation - OpenAI doesn't provide a direct API for token counting
+            // We'll use a rough estimate: ~4 characters per token
+            const totalContent = openaiMessages.reduce((acc, msg) => {
+                if (typeof msg.content === 'string') {
+                    return acc + msg.content.length;
+                }
+                return acc + JSON.stringify(msg.content).length;
+            }, 0);
+            
+            // Add system prompt and tools to token count
+            const systemTokens = this.systemPrompt.length;
+            const toolsTokens = JSON.stringify(this.tools).length;
+            
+            return Math.ceil((totalContent + systemTokens + toolsTokens) / 4);
         } catch (error) {
             log.warning(`Error counting tokens: ${error instanceof Error ? error.message : String(error)}`);
             return Infinity;
         }
+    }
+
+    /**
+     * Convert internal message format to OpenAI format
+     */
+    private convertToOpenAIMessages(messages: MessageParam[]): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+        const openaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+        
+        // Add system message first
+        if (this.systemPrompt) {
+            openaiMessages.push({
+                role: 'system',
+                content: this.systemPrompt
+            });
+        }
+
+        for (const message of messages) {
+            if (message.role === 'system') continue; // Skip system messages in conversation as we handle it separately
+            
+            if (message.role === 'tool') {
+                // Tool result message
+                openaiMessages.push({
+                    role: 'tool',
+                    content: typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+                    tool_call_id: message.tool_call_id!
+                });
+            } else if (message.tool_calls) {
+                // Assistant message with tool calls
+                openaiMessages.push({
+                    role: 'assistant',
+                    content: typeof message.content === 'string' ? message.content : null,
+                    tool_calls: message.tool_calls.map(tc => ({
+                        id: tc.id,
+                        type: 'function',
+                        function: {
+                            name: tc.function.name,
+                            arguments: tc.function.arguments
+                        }
+                    }))
+                });
+            } else {
+                // Regular user or assistant message
+                if (message.role === 'user') {
+                    openaiMessages.push({
+                        role: 'user',
+                        content: typeof message.content === 'string'
+                            ? message.content
+                            : Array.isArray(message.content)
+                                ? message.content.map(c => {
+                                    if (c.type === 'text') {
+                                        return { type: 'text', text: c.text };
+                                    } else if (c.type === 'image_url') {
+                                        return { type: 'image_url', image_url: c.image_url };
+                                    }
+                                    return c;
+                                })
+                                : JSON.stringify(message.content)
+                    });
+                } else if (message.role === 'assistant') {
+                    openaiMessages.push({
+                        role: 'assistant',
+                        content: typeof message.content === 'string'
+                            ? message.content
+                            : Array.isArray(message.content)
+                                ? message.content
+                                    .filter(c => c.type === 'text')
+                                    .map(c => c.text)
+                                    .join('') || null
+                                : JSON.stringify(message.content)
+                    });
+                }
+            }
+        }
+
+        return openaiMessages;
+    }
+
+    /**
+     * Convert OpenAI tools format to our internal format
+     */
+    private convertToOpenAITools(): OpenAI.Chat.Completions.ChatCompletionTool[] {
+        return this.tools.map(tool => ({
+            type: 'function',
+            function: {
+                name: tool.name,
+                description: tool.description || '',
+                parameters: tool.input_schema as any
+            }
+        }));
     }
 
     /**
@@ -279,15 +341,25 @@ export class ConversationManager {
                 log.debug(`[internal] createMessageWithRetry message content: ${message.role}: ${message.content.substring(0, 50)}...`);
                 continue;
             }
-            for (const block of message.content) {
-                if (block.type === 'text') {
-                    log.debug(`[internal] createMessageWithRetry block text: ${message.role}: ${block.text?.substring(0, 50)}...`);
-                } else if (block.type === 'tool_use') {
-                    log.debug(`[internal] createMessageWithRetry block tool_use: ${block.name}, input: ${JSON.stringify(block.input).substring(0, 50)}...`);
-                } else if (block.type === 'tool_result') {
-                    const content = typeof block.content === 'string' ? block.content.substring(0, 50) : JSON.stringify(block.content).substring(0, 50);
-                    log.debug(`[internal] createMessageWithRetry block tool_result: ${block.tool_use_id}, content: ${content}...`);
+            if (Array.isArray(message.content)) {
+                for (const block of message.content) {
+                    if (block.type === 'text') {
+                        log.debug(`[internal] createMessageWithRetry block text: ${message.role}: ${block.text?.substring(0, 50)}...`);
+                    } else if (block.type === 'image_url') {
+                        log.debug(`[internal] createMessageWithRetry block image: ${message.role}: ${block.image_url.url.substring(0, 50)}...`);
+                    }
                 }
+            }
+            if (message.tool_calls) {
+                for (const toolCall of message.tool_calls) {
+                    log.debug(`[internal] createMessageWithRetry tool_call: ${toolCall.function.name}, input: ${toolCall.function.arguments.substring(0, 50)}...`);
+                }
+            }
+            if (message.tool_call_id) {
+                const contentStr = typeof message.content === 'string'
+                    ? message.content
+                    : JSON.stringify(message.content ?? '');
+                log.debug(`[internal] createMessageWithRetry tool_result: ${message.tool_call_id}, content: ${contentStr.substring(0, 50)}...`);
             }
         }
     }
@@ -295,9 +367,8 @@ export class ConversationManager {
     private async createMessageWithRetry(
         maxRetries = 3,
         retryDelayMs = 2000, // 2 seconds
-    ): Promise<Message> {
+    ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
         // Check context window before API call
-        // TODO pruneAndFix could be a class function, I had it there but I had to revert because of images size
         this.conversation = pruneAndFixConversation(this.conversation);
         await this.ensureContextWindowLimit();
 
@@ -305,38 +376,32 @@ export class ConversationManager {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 log.debug(`Making API call with ${this.conversation.length} messages`);
-                const response = await this.anthropic.messages.create({
+                
+                const openaiMessages = this.convertToOpenAIMessages(this.conversation);
+                const openaiTools = this.convertToOpenAITools();
+                
+                const params: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
                     model: this.modelName,
+                    messages: openaiMessages,
                     max_tokens: this.modelMaxOutputTokens,
-                    messages: this.conversation,
-                    system: this.systemPrompt,
-                    tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
-                });
+                };
+
+                if (openaiTools.length > 0) {
+                    params.tools = openaiTools;
+                    params.tool_choice = 'auto';
+                }
+
+                const response = await this.openai.chat.completions.create(params);
+                
                 if (this.tokenCharger && response.usage) {
-                    const inputTokens = response.usage.input_tokens ?? 0;
-                    const outputTokens = response.usage.output_tokens ?? 0;
+                    const inputTokens = response.usage.prompt_tokens ?? 0;
+                    const outputTokens = response.usage.completion_tokens ?? 0;
                     await this.tokenCharger.chargeTokens(inputTokens, outputTokens, this.modelName);
                 }
                 return response;
             } catch (error) {
                 lastError = error as Error;
                 if (error instanceof Error) {
-                    // Log conversation state for debugging
-                    if (error.message.includes('tool_use_id') || error.message.includes('tool_result') || error.message.includes('at least one message')) {
-                        const conversationDebug = this.conversation.map((msg, index) => ({
-                            index,
-                            role: msg.role,
-                            contentTypes: Array.isArray(msg.content)
-                                ? msg.content.map((block) => block.type)
-                                : 'string',
-                            contentLength: typeof msg.content === 'string' ? msg.content.length : msg.content.length,
-                        }));
-
-                        log.error('Conversation structure error. Current conversation:', {
-                            conversationLength: this.conversation.length,
-                            conversation: conversationDebug,
-                        });
-                    }
                     if (error.message.includes('429') || error.message.includes('529')) {
                         if (attempt < maxRetries) {
                             const delay = attempt * retryDelayMs;
@@ -365,118 +430,106 @@ export class ConversationManager {
     /**
      * Handles the response from the LLM (Large Language Model), processes text and tool_use blocks,
      * emits SSE events, manages tool execution, and recursively continues the conversation as needed.
-     *
-     * ## Flow:
-     * 1. Processes all text blocks in the LLM response and emits them as assistant messages.
-     * 2. Gathers all tool_use blocks:
-     *    - If tool_use blocks are present and the tool call limit is reached, emits a warning and stops further tool calls.
-     *    - Otherwise, emits tool_use blocks as assistant messages.
-     *    - The assistant message (containing only text) is added to the conversation history.
-     * 3. If there are no tool_use blocks, the function returns (end of this response cycle).
-     * 4. For each tool_use block:
-     *    - Calls the corresponding tool using the provided client.
-     *    - Emits the tool result (or error) as a user message via SSE.
-     *    - Appends the tool result to the conversation.
-     * 5. After processing all tool_use blocks, requests the next response from the LLM (using updated conversation).
-     * 6. Recursively calls itself to process the next LLM response, incrementing the tool call round counter.
-     *
-     * @param client - The MCP client used to call tools.
-     * @param response - The LLM response message to process.
-     * @param sseEmit - Function to emit SSE events to the client (role, content).
-     * @param toolCallCountRound - The current round of tool calls for this query (used to enforce limits).
-     * @returns A promise that resolves when the response and all recursive tool calls are fully processed.
      */
-    async handleLLMResponse(client: Client, response: Message, sseEmit: (role: string, content: string | ContentBlockParam[]) => void, toolCallCountRound = 0) {
+    async handleLLMResponse(client: Client, response: OpenAI.Chat.Completions.ChatCompletion, sseEmit: (role: string, content: string | any[]) => void, toolCallCountRound = 0) {
         log.debug(`[internal] handleLLMResponse: ${JSON.stringify(response)}`);
 
-        // Refactored: preserve block order as received
-        const assistantMessage: MessageParamWithBlocks = {
+        const choice = response.choices[0];
+        if (!choice?.message) {
+            throw new Error('No message in OpenAI response');
+        }
+
+        const message = choice.message;
+        
+        // Create assistant message
+        const assistantMessage: MessageParam = {
             role: 'assistant',
-            content: [],
+            content: message.content || '',
         };
-        const toolUseBlocks: ContentBlockParam[] = [];
-        for (const block of response.content) {
-            if (block.type === 'text') {
-                assistantMessage.content.push(block);
-                log.debug(`[internal] emitting SSE text message: ${block.text}`);
-                sseEmit('assistant', block.text || '');
-            } else if (block.type === 'tool_use') {
-                if (toolCallCountRound >= this.maxNumberOfToolCallsPerQueryRound) {
-                    // Tool call limit hit before any tool_use is processed
-                    const msg = `Too many tool calls in a single turn! This has been implemented to prevent infinite loops.\nLimit is ${this.maxNumberOfToolCallsPerQueryRound}.\nYou can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
-                    assistantMessage.content.push({
-                        type: 'text',
-                        text: msg,
-                    });
-                    log.debug(`[internal] emitting SSE tool limit message: ${msg}`);
-                    sseEmit('assistant', msg);
-                    this.conversation.push(assistantMessage);
-                    break;
+
+        // Handle text content
+        if (message.content) {
+            log.debug(`[internal] emitting SSE text message: ${message.content}`);
+            sseEmit('assistant', message.content);
+        }
+
+        // Handle tool calls
+        if (message.tool_calls && message.tool_calls.length > 0) {
+            if (toolCallCountRound >= this.maxNumberOfToolCallsPerQueryRound) {
+                const msg = `Too many tool calls in a single turn! This has been implemented to prevent infinite loops.\nLimit is ${this.maxNumberOfToolCallsPerQueryRound}.\nYou can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
+                assistantMessage.content = (assistantMessage.content || '') + '\n' + msg;
+                log.debug(`[internal] emitting SSE tool limit message: ${msg}`);
+                sseEmit('assistant', msg);
+                this.conversation.push(assistantMessage);
+                return;
+            }
+
+            assistantMessage.tool_calls = message.tool_calls.map(tc => ({
+                id: tc.id,
+                type: 'function',
+                function: {
+                    name: tc.function.name,
+                    arguments: tc.function.arguments
                 }
-                assistantMessage.content.push(block);
-                log.debug(`[internal] emitting SSE tool_use message: ${JSON.stringify(block)}`);
-                sseEmit('assistant', [block]);
-                toolUseBlocks.push(block);
+            }));
+
+            // Emit tool calls
+            for (const toolCall of message.tool_calls) {
+                log.debug(`[internal] emitting SSE tool_call message: ${JSON.stringify(toolCall)}`);
+                sseEmit('assistant', [toolCall]);
             }
         }
-        // Add the assistant message to the conversation
-        // Assistant's turn is finished here, now we proceed with user if there are tool_use blocks
-        // if not we just return
+
         this.conversation.push(assistantMessage);
-        // If no tool_use blocks, we can return early
-        if (toolUseBlocks.length === 0) {
-            log.debug('[internal] No tool_use blocks found, returning from handleLLMResponse');
+
+        // If no tool calls, we're done
+        if (!message.tool_calls || message.tool_calls.length === 0) {
+            log.debug('[internal] No tool calls found, returning from handleLLMResponse');
             return;
         }
 
-        // Handle tool_use blocks
-        // call tools and append and emit tool result messages
-        const userToolResultsMessage: MessageParamWithBlocks = {
-            role: 'user',
-            content: [],
-        };
-        for (const block of toolUseBlocks) {
-            if (block.type !== 'tool_use') continue; // Type guard
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const params = { name: block.name, arguments: block.input as any };
-            log.debug(`[internal] Calling tool (count: ${toolCallCountRound}): ${JSON.stringify(params)}`);
-            const toolResultBlock: ContentBlockParam = {
-                type: 'tool_result',
-                tool_use_id: block.id,
-                content: [],
-                is_error: false,
+        // Handle tool calls
+        for (const toolCall of message.tool_calls) {
+            const params = { 
+                name: toolCall.function.name, 
+                arguments: JSON.parse(toolCall.function.arguments) 
             };
+            log.debug(`[internal] Calling tool (count: ${toolCallCountRound}): ${JSON.stringify(params)}`);
+            
+            let toolResult: string;
+            let isError = false;
+            
             try {
                 const results = await client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
                 if (results && typeof results === 'object' && 'content' in results) {
-                    toolResultBlock.content = this.processToolResults(results as CallToolResult, params.name);
+                    toolResult = this.processToolResults(results as CallToolResult, params.name);
                 } else {
                     log.warning(`Tool ${params.name} returned unexpected result format:`, results);
-                    toolResultBlock.content = [{
-                        type: 'text',
-                        text: `Tool "${params.name}" returned unexpected result format: ${JSON.stringify(results, null, 2)}`,
-                    }];
+                    toolResult = `Tool "${params.name}" returned unexpected result format: ${JSON.stringify(results, null, 2)}`;
                 }
             } catch (error) {
                 log.error(`Error when calling tool ${params.name}: ${error}`);
-                toolResultBlock.content = [{
-                    type: 'text',
-                    text: `Error when calling tool ${params.name}, error: ${error}`,
-                }];
-                toolResultBlock.is_error = true;
+                toolResult = `Error when calling tool ${params.name}, error: ${error}`;
+                isError = true;
             }
 
-            userToolResultsMessage.content.push(toolResultBlock);
-            log.debug(`[internal] emitting SSE tool_result message: ${JSON.stringify(toolResultBlock)}`);
-            sseEmit('user', [toolResultBlock]);
+            // Create tool result message
+            const toolResultMessage: MessageParam = {
+                role: 'tool',
+                content: toolResult,
+                tool_call_id: toolCall.id
+            };
+
+            this.conversation.push(toolResultMessage);
+            log.debug(`[internal] emitting SSE tool_result message: ${JSON.stringify(toolResultMessage)}`);
+            sseEmit('user', [{ tool_call_id: toolCall.id, content: toolResult, is_error: isError }]);
         }
 
-        // Add the user tool results message to the conversation
-        this.conversation.push(userToolResultsMessage);
-        // If we have tool results, we need to get the next response from the model
+        // Get next response from model
         log.debug('[internal] Get model response from tool result');
-        const nextResponse: Message = await this.createMessageWithRetry();
+        const nextResponse = await this.createMessageWithRetry();
         log.debug('[internal] Received response from model');
+        
         // Process the next response recursively
         await this.handleLLMResponse(client, nextResponse, sseEmit, toolCallCountRound + 1);
         log.debug('[internal] Finished processing tool result');
@@ -484,17 +537,17 @@ export class ConversationManager {
 
     /**
      * Process a user query:
-     * 1) Use Anthropic to generate a response (which may contain "tool_use").
-     * 2) If "tool_use" is present, call the main actor's tool via `this.mcpClient.callTool()`.
+     * 1) Use OpenAI to generate a response (which may contain "tool_calls").
+     * 2) If "tool_calls" is present, call the main actor's tool via `this.mcpClient.callTool()`.
      * 3) Return or yield partial results so we can SSE them to the browser.
      */
-    async processUserQuery(client: Client, query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void) {
+    async processUserQuery(client: Client, query: string, sseEmit: (role: string, content: string | any[]) => void) {
         log.debug(`[internal] Call LLM with user query: ${JSON.stringify(query)}`);
         this.conversation.push({ role: 'user', content: query });
 
         try {
             const response = await this.createMessageWithRetry();
-            log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
+            log.debug(`[internal] Received response: ${JSON.stringify(response.choices[0]?.message)}`);
             log.debug(`[internal] Token count: ${JSON.stringify(response.usage)}`);
             await this.handleLLMResponse(client, response, sseEmit);
         } catch (error) {
@@ -512,50 +565,27 @@ export class ConversationManager {
     }
 
     /**
-     * Process tool call results and convert them into appropriate content blocks
+     * Process tool call results and convert them into appropriate content
      */
-    private processToolResults(results: CallToolResult, toolName: string): (TextBlockParam | ImageBlockParam)[] {
+    private processToolResults(results: CallToolResult, toolName: string): string {
         if (!results.content || !Array.isArray(results.content) || results.content.length === 0) {
-            return [{
-                type: 'text',
-                text: `No results retrieved from ${toolName}`,
-            }];
+            return `No results retrieved from ${toolName}`;
         }
-        const processedContent: (TextBlockParam | ImageBlockParam)[] = [];
-        processedContent.push({
-            type: 'text',
-            text: `Tool "${toolName}" executed successfully. Results:`,
-        });
+        
+        let processedContent = `Tool "${toolName}" executed successfully. Results:\n`;
+        
         for (const item of results.content) {
             if (item.type === 'image' && item.data) {
-                const mediaType = this.detectImageFormat(item.data);
-                log.debug(`Detected image format: ${mediaType}`);
-                processedContent.push({
-                    type: 'image',
-                    source: {
-                        type: 'base64',
-                        media_type: mediaType,
-                        data: item.data,
-                    },
-                });
-                continue;
-            }
-            if (item.type === 'text' && item.text) {
-                processedContent.push({
-                    type: 'text',
-                    text: item.text,
-                });
-                continue;
-            }
-            // Other data types
-            if (item.data) {
-                processedContent.push({
-                    type: 'text',
-                    text: typeof item.data === 'string' ? item.data : JSON.stringify(item.data, null, 2),
-                });
+                processedContent += `[Image data received - ${item.data.length} characters]\n`;
+            } else if (item.type === 'text' && item.text) {
+                processedContent += item.text + '\n';
+            } else if (item.data) {
+                processedContent += typeof item.data === 'string' ? item.data : JSON.stringify(item.data, null, 2);
+                processedContent += '\n';
             }
         }
-        return processedContent;
+        
+        return processedContent.trim();
     }
 
     /**

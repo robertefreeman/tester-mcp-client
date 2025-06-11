@@ -60,5 +60,11 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
         log.info('No API key provided for an LLM provider, Actor will charge for tokens usage');
         input.llmProviderApiKey = process.env.LLM_PROVIDER_API_KEY ?? '';
     }
+
+    // Set base URL from environment if not provided
+    if (!input.llmProviderBaseUrl) {
+        input.llmProviderBaseUrl = process.env.LLM_PROVIDER_BASE_URL;
+    }
+
     return input as Input;
 }
