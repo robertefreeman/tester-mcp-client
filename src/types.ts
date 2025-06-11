@@ -2,6 +2,7 @@ export type Input = {
     llmProviderApiKey: string,
     llmProviderBaseUrl?: string,
     modelName: string,
+    customModelName?: string,
     headers: Record<string, string>,
     maxNumberOfToolCallsPerQuery: number,
     modelMaxOutputTokens: number,
@@ -22,6 +23,7 @@ export type StandbyInput = Input & {
     mcpSseUrl: string,
     mcpUrl: string,
     headers: string | Record<string, string>,
+    customModelName?: string,
 }
 
 export type Tool = {

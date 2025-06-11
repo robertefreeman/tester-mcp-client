@@ -53,6 +53,17 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
         throw new Error(`LLM model name is not provided. ${MISSING_PARAMETER_ERROR}: 'modelName'`);
     }
 
+    // Handle custom model names and environment variable override
+    if (input.modelName === 'custom' && input.customModelName) {
+        input.modelName = input.customModelName;
+    }
+    
+    // Allow MODEL_NAME environment variable to override the model name
+    if (process.env.MODEL_NAME) {
+        input.modelName = process.env.MODEL_NAME;
+        log.info(`Model name overridden by environment variable: ${input.modelName}`);
+    }
+
     if (input.llmProviderApiKey && input.llmProviderApiKey !== '') {
         log.info('Using user provided API key for an LLM provider');
         isChargingForTokens = false;

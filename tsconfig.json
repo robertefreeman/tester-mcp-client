@@ -9,7 +9,9 @@
     "lib": ["ES2022"],
     "skipLibCheck": true,
     "typeRoots": ["./types", "./node_modules/@types"],
-    "strict": true
+    "strict": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true
   },
   "include": ["./src/**/*"],
   "exclude": ["node_modules"]

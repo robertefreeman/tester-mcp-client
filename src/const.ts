@@ -4,6 +4,7 @@ export const defaults = {
     mcpUrl: inputSchema.properties.mcpUrl.default,
     systemPrompt: inputSchema.properties.systemPrompt.default,
     modelName: inputSchema.properties.modelName.default,
+    customModelName: '',
     modelMaxOutputTokens: inputSchema.properties.modelMaxOutputTokens.default,
     maxNumberOfToolCallsPerQuery: inputSchema.properties.maxNumberOfToolCallsPerQuery.default,
     toolCallTimeoutSec: inputSchema.properties.toolCallTimeoutSec.default,

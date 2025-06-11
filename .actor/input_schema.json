@@ -1,102 +1,121 @@
 {
-    "title": "Apify MCP Client",
-    "type": "object",
-    "schemaVersion": 1,
-    "properties": {
-        "mcpSseUrl": {
-            "title": "MCP Server Sent Events (SSE) URL",
-            "type": "string",
-            "description": "MCP Server Sent Events (SSE) URL for receiving updates from the server.\n\nMake sure that URL path ends with `/sse`",
-            "editor": "hidden"
-        },
-        "mcpUrl": {
-            "title": "MCP Server URL",
-            "type": "string",
-            "description": "URL of the MCP Server for updates. Use `SSEClientTransport` if the URL ends with `/sse`; otherwise, use `HttpStreamableClientTransport`.",
-            "editor": "textfield",
-            "default": "https://mcp.apify.com/sse?enableAddingActors=true",
-            "prefill": "https://mcp.apify.com/sse?enableAddingActors=true"
-        },
-        "mcpTransportType": {
-            "title": "MCP transport type specification",
-            "type": "string",
-            "description": "This setting helps you to override the MCP transport layer if required. Use `SSEClientTransport` for Server Sent Events (2024-11-05) or `HttpStreamableClientTransport` for JSON Response Streamable HTTP (2025-03-26).",
-            "enum": ["sse", "http-streamable-json-response"],
-            "enumTitles": ["SSE (Server Sent Events, 2024-11-05)", "JSON Response Streamable HTTP (2025-03-26)"],
-            "default": "sse"
-        },
-        "headers": {
-            "title": "HTTP headers",
-            "type": "object",
-            "description": "HTTP headers to be sent with the request to the MCP server. If you are using Apify's MCP server, headers are NOT required",
-            "editor": "json"
-        },
-        "systemPrompt": {
-            "title": "System prompt",
-            "type": "string",
-            "description": "System prompt for the LLM model",
-            "editor": "textarea",
-            "default": "You are a helpful Apify assistant with tools called Actors.\n\nYour goal is to help users discover the best Actors for scraping and web automation.\nYou have access to a list of tools that can help you discover Actors, find details, and include them among tools for later execution.\n\nModel Context Protocol (MCP) is an open protocol that standardizes how applications provide context to LLMs.\n\nChoose the appropriate Actor based on the conversation context. If no Actor is needed, reply directly.\n\nPrefer Actors with more users, stars, and runs.\nWhen you need to use an Actor, explain how it is used and with which parameters.\nNever call an Actor unless it is required by the user!\nAfter receiving an Actor's response:\n1. Transform the raw data into a natural, conversational response.\n2. Keep responses concise but informative.\n3. Focus on the most relevant information.\n4. Use appropriate context from the user's question.\n5. Avoid simply repeating the raw data.\nAlways use 'Actor', not 'actor'. Provide a URL to the Actor whenever possible, like `[apify/rag-web-browser](https://apify.com/apify/rag-web-browser)`.\nActor execution may take some time, and results can be large. Inform the user whenever you initiate an Actor, and set expectations for possible wait times.\nIf possible, limit the number of results to 3, 5, or 10. Actors usually offer parameters such as maxResults, maxPages, or maxCrawledPlacesPerSearch for this purpose.\nThe server limits the number of results returned, but you can always request more results from paginated datasets or fetch additional data from the key-value store if needed.\n",
-            "prefill": "You are a helpful Apify assistant with tools called Actors.\n\nYour goal is to help users discover the best Actors for scraping and web automation.\nYou have access to a list of tools that can help you discover Actors, find details, and include them among tools for later execution.\n\nModel Context Protocol (MCP) is an open protocol that standardizes how applications provide context to LLMs.\n\nChoose the appropriate Actor based on the conversation context. If no Actor is needed, reply directly.\n\nPrefer Actors with more users, stars, and runs.\nWhen you need to use an Actor, explain how it is used and with which parameters.\nNever call an Actor unless it is required by the user!\nAfter receiving an Actor's response:\n1. Transform the raw data into a natural, conversational response.\n2. Keep responses concise but informative.\n3. Focus on the most relevant information.\n4. Use appropriate context from the user's question.\n5. Avoid simply repeating the raw data.\nAlways use 'Actor', not 'actor'. Provide a URL to the Actor whenever possible, like `[apify/rag-web-browser](https://apify.com/apify/rag-web-browser)`.\nActor execution may take some time, and results can be large. Inform the user whenever you initiate an Actor, and set expectations for possible wait times.\nIf possible, limit the number of results to 3, 5, or 10. Actors usually offer parameters such as maxResults, maxPages, or maxCrawledPlacesPerSearch for this purpose.\nThe server limits the number of results returned, but you can always request more results from paginated datasets or fetch additional data from the key-value store if needed.\n"
-        },
-        "modelName": {
-            "title": "OpenAI-compatible model",
-            "type": "string",
-            "description": "Select a model to be used for selecting tools and generating text.\n\n- GPT-4 Turbo - highly intelligent model with large context\n- GPT-4 - intelligent model\n- GPT-3.5 Turbo - fast and cost-effective model",
-            "editor": "select",
-            "enum": [
-                "gpt-4-turbo",
-                "gpt-4",
-                "gpt-3.5-turbo"
-            ],
-            "enumTitles": [
-                "GPT-4 Turbo",
-                "GPT-4",
-                "GPT-3.5 Turbo"
-            ],
-            "default": "gpt-4-turbo"
-        },
-        "llmProviderApiKey": {
-            "title": "LLM Provider API key",
-            "type": "string",
-            "description": "API key for accessing a Large Language Model (OpenAI API key or compatible). If you provide your own API key, Actor will not charge for query answered event.",
-            "editor": "textfield",
-            "isSecret": true
-        },
-        "llmProviderBaseUrl": {
-            "title": "LLM Provider Base URL",
-            "type": "string",
-            "description": "Base URL for the OpenAI-compatible API endpoint. Leave empty to use OpenAI's default endpoint.",
-            "editor": "textfield"
-        },
-        "modelMaxOutputTokens": {
-            "title": "Maximum tokens for LLM response",
-            "type": "integer",
-            "description": "Maximum number of tokens in the LLM response. The higher the number, the longer the response time",
-            "editor": "number",
-            "prefill": 2048,
-            "default": 2048,
-            "maximum": 10000
-        },
-        "maxNumberOfToolCallsPerQuery": {
-            "title": "Maximum number of tool calls per query",
-            "type": "integer",
-            "description": "Maximum number of times a tool can be called with one query. Keep this number low for simple flows",
-            "editor": "number",
-            "prefill": 20,
-            "default": 20
-        },
-        "toolCallTimeoutSec": {
-            "title": "Tool call timeout",
-            "type": "integer",
-            "description": "Timeout for a single tool call in seconds",
-            "editor": "number",
-            "prefill": 300,
-            "default": 300
-        }
+  "title": "OpenAI-compatible MCP Client Input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "mcpUrl": {
+      "title": "MCP Server URL",
+      "type": "string",
+      "description": "URL of the Model Context Protocol server to connect to",
+      "default": "https://api.apify.com/v2/acts/apify~actors-mcp-server/run-sync-get-dataset-items?token=YOUR_TOKEN",
+      "editor": "textfield"
     },
-    "required": [
-        "mcpUrl",
-        "modelName"
-    ]
+    "systemPrompt": {
+      "title": "System Prompt",
+      "type": "string",
+      "description": "System prompt to use for the AI assistant",
+      "default": "You are a helpful AI assistant with access to various tools and services.",
+      "editor": "textarea"
+    },
+    "modelName": {
+      "title": "Model Name",
+      "type": "string",
+      "description": "Name of the language model to use. Supports OpenAI models (gpt-4, gpt-3.5-turbo, etc.) and custom models from OpenAI-compatible endpoints (Ollama, vLLM, local models, etc.). For custom endpoints, you can specify any model name supported by your provider.",
+      "default": "gpt-4-turbo",
+      "enum": [
+        "gpt-4-turbo",
+        "gpt-4",
+        "gpt-3.5-turbo",
+        "llama2",
+        "llama2:7b",
+        "llama2:13b",
+        "llama2:70b",
+        "codellama",
+        "codellama:7b",
+        "codellama:13b",
+        "codellama:34b",
+        "mistral",
+        "mistral:7b",
+        "mixtral:8x7b",
+        "phi3",
+        "phi3:mini",
+        "gemma:2b",
+        "gemma:7b",
+        "custom"
+      ],
+      "enumTitles": [
+        "GPT-4 Turbo (OpenAI)",
+        "GPT-4 (OpenAI)",
+        "GPT-3.5 Turbo (OpenAI)",
+        "Llama 2 (Default)",
+        "Llama 2 7B",
+        "Llama 2 13B",
+        "Llama 2 70B",
+        "Code Llama (Default)",
+        "Code Llama 7B",
+        "Code Llama 13B",
+        "Code Llama 34B",
+        "Mistral (Default)",
+        "Mistral 7B",
+        "Mixtral 8x7B",
+        "Phi-3 (Default)",
+        "Phi-3 Mini",
+        "Gemma 2B",
+        "Gemma 7B",
+        "Custom Model Name"
+      ],
+      "editor": "select"
+    },
+    "customModelName": {
+      "title": "Custom Model Name",
+      "type": "string",
+      "description": "Specify a custom model name when 'Custom Model Name' is selected above. This allows you to use any model supported by your OpenAI-compatible endpoint.",
+      "editor": "textfield"
+    },
+    "modelMaxOutputTokens": {
+      "title": "Maximum Output Tokens",
+      "type": "integer",
+      "description": "Maximum number of tokens the model can generate in a single response",
+      "default": 4096,
+      "minimum": 1,
+      "maximum": 32768
+    },
+    "maxNumberOfToolCallsPerQuery": {
+      "title": "Max Tool Calls Per Query",
+      "type": "integer",
+      "description": "Maximum number of tool calls allowed per user query",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 50
+    },
+    "toolCallTimeoutSec": {
+      "title": "Tool Call Timeout (seconds)",
+      "type": "integer",
+      "description": "Timeout in seconds for individual tool calls",
+      "default": 30,
+      "minimum": 5,
+      "maximum": 300
+    },
+    "llmProviderApiKey": {
+      "title": "LLM Provider API Key",
+      "type": "string",
+      "description": "API key for the LLM provider (OpenAI or compatible service). Leave empty to use the platform's built-in billing.",
+      "isSecret": true,
+      "editor": "textfield"
+    },
+    "llmProviderBaseUrl": {
+      "title": "LLM Provider Base URL",
+      "type": "string",
+      "description": "Base URL for OpenAI-compatible API endpoints (e.g., http://localhost:11434/v1 for Ollama, or custom vLLM endpoints). Leave empty for OpenAI's official API.",
+      "editor": "textfield"
+    },
+    "headers": {
+      "title": "Additional Headers",
+      "type": "object",
+      "description": "Additional HTTP headers to send with MCP server requests (as JSON object)",
+      "default": {},
+      "editor": "json"
+    }
+  },
+  "required": ["mcpUrl", "modelName"]
 }

@@ -39,6 +39,8 @@ export class ActorTokenCharger implements TokenCharger {
     async chargeTokens(inputTokens: number, outputTokens: number, modelName: string): Promise<void> {
         let eventNameInput: string;
         let eventNameOutput: string;
+        
+        // Handle standard OpenAI models with specific billing events
         switch (modelName) {
             case 'gpt-3.5-turbo':
                 eventNameInput = Event.INPUT_TOKENS_GPT35;
@@ -53,14 +55,18 @@ export class ActorTokenCharger implements TokenCharger {
                 eventNameOutput = Event.OUTPUT_TOKENS_GPT4_TURBO;
                 break;
             default:
+                // For custom models (Ollama, vLLM, local models, etc.), use GPT-4 billing as default
+                // This provides a reasonable approximation for unknown model costs
                 eventNameInput = Event.INPUT_TOKENS_GPT4;
                 eventNameOutput = Event.OUTPUT_TOKENS_GPT4;
+                log.info(`Using GPT-4 billing rates for custom model: ${modelName}`);
                 break;
         }
+        
         try {
             await Actor.charge({ eventName: eventNameInput, count: Math.ceil(inputTokens / 100) });
             await Actor.charge({ eventName: eventNameOutput, count: Math.ceil(outputTokens / 100) });
-            log.info(`Charged ${inputTokens} input tokens (query+tools) and ${outputTokens} output tokens`);
+            log.info(`Charged ${inputTokens} input tokens (query+tools) and ${outputTokens} output tokens for model: ${modelName}`);
         } catch (error) {
             log.error('Failed to charge for token usage', { error });
             throw error;
@@ -366,12 +372,23 @@ app.get('/settings', (_req, res) => {
  * GET /schema/models endpoint to retrieve available model options from input schema
  */
 app.get('/schema/models', (_req, res) => {
-    const { enum: models, enumTitles } = inputSchema.properties.modelName;
-    const modelOptions = models.map((model: string, index: number) => ({
-        value: model,
-        label: enumTitles[index],
-    }));
-    res.json(modelOptions);
+    try {
+        const { enum: models, enumTitles } = inputSchema.properties.modelName;
+        const modelOptions = models.map((model: string, index: number) => ({
+            value: model,
+            label: enumTitles[index],
+        }));
+        res.json(modelOptions);
+    } catch (error) {
+        // Fallback if schema is not available
+        const defaultModels = [
+            { value: 'gpt-4-turbo', label: 'GPT-4 Turbo (OpenAI)' },
+            { value: 'gpt-4', label: 'GPT-4 (OpenAI)' },
+            { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (OpenAI)' },
+            { value: 'custom', label: 'Custom Model Name' },
+        ];
+        res.json(defaultModels);
+    }
 });
 
 /**
